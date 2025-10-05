@@ -280,6 +280,13 @@
             renderCurrentPage();
         }
 
+        // 楽曲追加開始
+        window.startAddSong = () => {
+            editingSong = {};
+            uploadedImageFile = null;
+            renderCurrentPage();
+        };
+
         // ページレンダリング
         function renderCurrentPage() {
             const content = document.getElementById('content');
@@ -477,40 +484,50 @@
                     <div class="space-y-6">
                         <div class="flex justify-between items-center">
                             <h2 class="text-2xl font-bold text-white">楽曲管理</h2>
-                            <button onclick="editingSong = {}; renderCurrentPage();" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold">
+                            <button onclick="startAddSong()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition">
                                 + 新規追加
                             </button>
                         </div>
 
                         <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
                             <h3 class="text-xl font-bold text-gray-800 mb-4">登録楽曲一覧</h3>
-                            <div class="space-y-2 max-h-96 overflow-y-auto">
-                                ${songs.map(song => `
-                                    <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                                        ${song.imageUrl ? `
-                                            <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-16 h-16 object-cover rounded" />
-                                        ` : `
-                                            <div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center flex-shrink-0">
-                                                <svg class="w-8 h-8 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                                                </svg>
+                            ${songs.length === 0 ? `
+                                <div class="text-center py-8 text-gray-500">
+                                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                                    </svg>
+                                    <p class="text-lg">楽曲が登録されていません</p>
+                                    <p class="text-sm mt-2">「新規追加」ボタンから楽曲を追加してください</p>
+                                </div>
+                            ` : `
+                                <div class="space-y-2 max-h-96 overflow-y-auto">
+                                    ${songs.map(song => `
+                                        <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                                            ${song.imageUrl ? `
+                                                <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-16 h-16 object-cover rounded" />
+                                            ` : `
+                                                <div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center flex-shrink-0">
+                                                    <svg class="w-8 h-8 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                                                    </svg>
+                                                </div>
+                                            `}
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-semibold text-gray-800 truncate">${escapeHtml(song.title)}</div>
+                                                <div class="text-sm text-gray-600 truncate">${escapeHtml(song.artist)}</div>
                                             </div>
-                                        `}
-                                        <div class="flex-1 min-w-0">
-                                            <div class="font-semibold text-gray-800 truncate">${escapeHtml(song.title)}</div>
-                                            <div class="text-sm text-gray-600 truncate">${escapeHtml(song.artist)}</div>
+                                            <div class="flex gap-2 flex-shrink-0">
+                                                <button onclick='editSong(${JSON.stringify(song).replace(/'/g, "&apos;")})' class="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition">
+                                                    編集
+                                                </button>
+                                                <button onclick="deleteSong('${song.id}')" class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition">
+                                                    削除
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div class="flex gap-2 flex-shrink-0">
-                                            <button onclick='editSong(${JSON.stringify(song).replace(/'/g, "&apos;")})' class="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg">
-                                                編集
-                                            </button>
-                                            <button onclick="deleteSong('${song.id}')" class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg">
-                                                削除
-                                            </button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
+                                    `).join('')}
+                                </div>
+                            `}
                         </div>
                     </div>
                 `;
@@ -569,10 +586,10 @@
                         </div>
 
                         <div class="flex gap-3">
-                            <button onclick="submitSong()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg">
+                            <button onclick="submitSong()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition">
                                 保存
                             </button>
-                            <button onclick="editingSong = null; uploadedImageFile = null; renderCurrentPage();" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 rounded-lg">
+                            <button onclick="cancelEditSong()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 rounded-lg transition">
                                 キャンセル
                             </button>
                         </div>
@@ -645,6 +662,12 @@
 
         window.editSong = (song) => {
             editingSong = song;
+            uploadedImageFile = null;
+            renderCurrentPage();
+        };
+
+        window.cancelEditSong = () => {
+            editingSong = null;
             uploadedImageFile = null;
             renderCurrentPage();
         };
