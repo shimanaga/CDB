@@ -29,7 +29,6 @@
         let currentPage = 'score';
         let selectedSong = null;
         let editingSong = null;
-        let uploadedImageFile = null;
 
         // Firebase初期化
         async function initFirebase() {
@@ -135,34 +134,6 @@
                 console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
             } catch (error) {
                 console.error("ユーザーデータ読み込みエラー:", error);
-            }
-        }
-
-        // 画像アップロード
-        async function uploadImage(file, songId) {
-            try {
-                const timestamp = Date.now();
-                const fileName = `songs/${songId}_${timestamp}.${file.name.split('.').pop()}`;
-                const storageRef = ref(storage, fileName);
-                
-                await uploadBytes(storageRef, file);
-                const downloadURL = await getDownloadURL(storageRef);
-                
-                return { url: downloadURL, path: fileName };
-            } catch (error) {
-                console.error("画像アップロードエラー:", error);
-                throw error;
-            }
-        }
-
-        // 古い画像削除
-        async function deleteOldImage(imagePath) {
-            if (!imagePath) return;
-            try {
-                const imageRef = ref(storage, imagePath);
-                await deleteObject(imageRef);
-            } catch (error) {
-                console.error("画像削除エラー:", error);
             }
         }
 
@@ -496,8 +467,13 @@
                                     ${songs.map(song => `
                                         <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
                                             ${song.imageUrl ? `
-                                                <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-16 h-16 object-cover rounded" />
-                                            ` : `
+                                                <img id="previewImage" src="${song.imageUrl}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                                    <div class="w-32 h-32 bg-gray-200 rounded-lg items-center justify-center flex-shrink-0" style="display:none;">
+                                                        <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                    </div>
+                                                ` : `
                                                 <div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center flex-shrink-0">
                                                     <svg class="w-8 h-8 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
@@ -547,8 +523,8 @@
                                     </div>
                                 `}
                                 <div class="flex-1">
-                                    <input type="file" id="imageInput" accept="image/*" onchange="handleImageSelect(event)" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" />
-                                    <p class="text-xs text-gray-500 mt-1">JPG, PNG, GIF (最大5MB)</p>
+                                    <input type="url" id="imageUrlInput" value="${song.imageUrl || ''}" oninput="updateImagePreview(this.value)" placeholder="https://example.com/image.jpg" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                                    <p class="text-xs text-gray-500 mt-1">ImgBB、Imgur、Googleドライブなどの画像URLを入力</p>
                                 </div>
                             </div>
                         </div>
@@ -590,33 +566,36 @@
             `;
         }
 
-        // 画像選択ハンドラー
-        window.handleImageSelect = (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            // ファイルサイズチェック（5MB）
-            if (file.size > 5 * 1024 * 1024) {
-                alert('画像ファイルは5MB以下にしてください');
-                event.target.value = '';
+        // 画像プレビュー更新
+        window.updateImagePreview = (url) => {
+            const preview = document.getElementById('previewImage');
+            if (!url) {
+                if (preview.tagName === 'IMG') {
+                    preview.outerHTML = `
+                        <div id="previewImage" class="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>`;
+                }
                 return;
             }
-
-            // プレビュー表示
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const preview = document.getElementById('previewImage');
-                if (preview.tagName === 'IMG') {
-                    preview.src = e.target.result;
-                } else {
-                    preview.outerHTML = `<img id="previewImage" src="${e.target.result}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" />`;
-                }
-            };
-            reader.readAsDataURL(file);
-
-            uploadedImageFile = file;
+    
+            if (preview.tagName === 'DIV') {
+                preview.outerHTML = `<img id="previewImage" src="${url}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                <div class="w-32 h-32 bg-gray-200 rounded-lg items-center justify-center flex-shrink-0" style="display:none;">
+                    <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                </div>`;
+            } else {
+                preview.src = url;
+                preview.style.display = 'block';
+                const fallback = preview.nextElementSibling;
+                if (fallback) fallback.style.display = 'none';
+            }
         };
-
+    
         // グローバル関数
         window.selectSong = (songId) => {
             selectedSong = songs.find(s => s.id === songId);
@@ -654,13 +633,11 @@
 
         window.editSong = (song) => {
             editingSong = song;
-            uploadedImageFile = null;
             renderCurrentPage();
         };
 
         window.cancelEditSong = () => {
             editingSong = null;
-            uploadedImageFile = null;
             renderCurrentPage();
         };
 
