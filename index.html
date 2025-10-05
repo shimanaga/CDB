@@ -413,10 +413,8 @@
         // 統計画面
         function renderStatistics(container) {
             const rates = Object.values(userScores).map(s => parseFloat(s.rate));
-            const avgRate = rates.length > 0 ? (rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(2) : '0.00';
-            const topRates = [...rates].sort((a, b) => b - a).slice(0, 30);
-            const overallRate = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(2) : '0.00';
-            const maxRate = rates.length > 0 ? Math.max(...rates).toFixed(2) : '0.00';
+            const topRates = [...rates].sort((a, b) => b - a).slice(0, 40);
+            const avgRate = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(2) : '0.000';
 
             const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
             const scoresWithSongInfo = Object.entries(userScores)
@@ -428,20 +426,16 @@
                 <div class="space-y-6">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
-                            <div class="text-sm text-gray-600 mb-1">登録スコア数</div>
-                            <div class="text-3xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
+                            <div class="text-sm text-gray-600 mb-1">Rating</div>
+                            <div class="text-3xl font-bold text-red-700">${totalRate}</div>
                         </div>
                         <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
                             <div class="text-sm text-gray-600 mb-1">平均レート</div>
                             <div class="text-3xl font-bold text-blue-700">${avgRate}</div>
                         </div>
                         <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
-                            <div class="text-sm text-gray-600 mb-1">総合レート (TOP30平均)</div>
-                            <div class="text-3xl font-bold text-green-700">${overallRate}</div>
-                        </div>
-                        <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
-                            <div class="text-sm text-gray-600 mb-1">最高レート</div>
-                            <div class="text-3xl font-bold text-pink-700">${maxRate}</div>
+                            <div class="text-sm text-gray-600 mb-1">登録スコア数</div>
+                            <div class="text-3xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
                         </div>
                     </div>
 
