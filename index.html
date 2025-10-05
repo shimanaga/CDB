@@ -383,7 +383,7 @@
                                 ${DIFFICULTIES.map((diff, idx) => 
                                     song.difficulties?.[diff] ? 
                                     `<button onclick="selectDifficulty('${diff}', ${song.difficulties[diff]})" class="${DIFFICULTY_COLORS[idx]} bg-opacity-50 hover:bg-opacity-100 text-white px-4 py-2 rounded-lg font-semibold transition" id="diff_${diff}">
-                                        ${diff} ${song.difficulties[diff]}
+                                        ${diff} ${Number(song.difficulties[diff]).toFixed(1)}
                                     </button>` 
                                     : ''
                                 ).join('')}
@@ -461,7 +461,7 @@
                                     `}
                                     <div class="flex-1 min-w-0">
                                         <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song.title)}</div>
-                                        <div class="text-sm text-gray-600">${score.difficulty} Lv.${score.level}</div>
+                                        <div class="text-sm text-gray-600">${score.difficulty} Lv.${Number(score.level).toFixed(1)}</div>
                                     </div>
                                     <div class="text-right flex-shrink-0">
                                         <div class="font-bold text-lg text-purple-700">Rate: ${score.rate}</div>
@@ -633,7 +633,7 @@
 
         window.selectDifficulty = (diff, level) => {
             window.selectedDifficulty = diff;
-            document.getElementById('levelInput').value = level;
+            document.getElementById('levelInput').value = Number(level).toFixed(1);
             document.getElementById('scoreInputs').classList.remove('hidden');
             
             DIFFICULTIES.forEach(d => {
