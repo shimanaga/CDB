@@ -414,6 +414,7 @@
         function renderStatistics(container) {
             const rates = Object.values(userScores).map(s => parseFloat(s.rate));
             const topRates = [...rates].sort((a, b) => b - a).slice(0, 40);
+            const totalRate = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0).toFixed(2) : '0.000';
             const avgRate = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(2) : '0.000';
 
             const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
