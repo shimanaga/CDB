@@ -8,8 +8,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase設定（あなたの設定値に置き換えてください）
         const firebaseConfig = {
@@ -25,7 +24,7 @@
         const DIFFICULTIES = ['NORMAL', 'HARD', 'MASTER', 'INSANITY', 'RAVAGE'];
         const DIFFICULTY_COLORS = ['bg-sky-400', 'bg-amber-500', 'bg-purple-600', 'bg-slate-400', 'bg-red-600'];
 
-        let app, auth, db, storage, currentUser, isAdmin = false;
+        let app, auth, db, currentUser, isAdmin = false;
         let songs = [], userScores = {};
         let currentPage = 'score';
         let selectedSong = null;
@@ -38,12 +37,10 @@
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                storage = getStorage(app);
 
                 // グローバルに公開（デバッグ用）
                 window.auth = auth;
                 window.db = db;
-                window.storage = storage;
 
                 // 匿名認証
                 await signInAnonymously(auth);
@@ -221,49 +218,18 @@
             }
         }
 
-        // 楽曲保存
+        // 楽曲保存（画像URL方式に変更）
         async function saveSong(songData) {
             const songId = songData.id || `song_${Date.now()}`;
-            let imageUrl = songData.imageUrl || '';
-            let imagePath = songData.imagePath || '';
+            const imageUrl = document.getElementById('imageUrlInput')?.value || songData.imageUrl || '';
 
             try {
-                // 新しい画像がアップロードされた場合
-                if (uploadedImageFile) {
-                    console.log('画像アップロード開始...');
-                    
-                    // 古い画像を削除
-                    if (songData.imagePath) {
-                        try {
-                            await deleteOldImage(songData.imagePath);
-                        } catch (error) {
-                            console.warn('古い画像の削除に失敗しました:', error);
-                        }
-                    }
-                    
-                    // 新しい画像をアップロード
-                    try {
-                        const imageData = await uploadImage(uploadedImageFile, songId);
-                        imageUrl = imageData.url;
-                        imagePath = imageData.path;
-                        console.log('画像アップロード完了:', imageUrl);
-                    } catch (error) {
-                        console.error('画像アップロードエラー:', error);
-                        if (error.code === 'storage/unauthorized') {
-                            throw new Error('Firebase Storageが有効化されていません。Firebase Consoleで Storage を有効化してください。');
-                        }
-                        throw new Error('画像のアップロードに失敗しました: ' + error.message);
-                    }
-                }
-
-                // Firestoreに保存
                 console.log('楽曲データ保存開始...');
                 await setDoc(doc(db, 'songs', songId), {
                     title: songData.title,
                     artist: songData.artist,
                     difficulties: songData.difficulties,
                     imageUrl: imageUrl,
-                    imagePath: imagePath,
                     createdAt: songData.createdAt || new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 });
@@ -271,7 +237,6 @@
 
                 await loadSongs();
                 editingSong = null;
-                uploadedImageFile = null;
                 alert('楽曲を保存しました！');
                 renderCurrentPage();
             } catch (error) {
@@ -280,18 +245,11 @@
             }
         }
 
-        // 楽曲削除
+        // 楽曲削除（シンプル化）
         async function deleteSong(songId) {
             if (!confirm('本当に削除しますか？')) return;
 
             try {
-                const song = songs.find(s => s.id === songId);
-                
-                // 画像も削除
-                if (song && song.imagePath) {
-                    await deleteOldImage(song.imagePath);
-                }
-                
                 await deleteDoc(doc(db, 'songs', songId));
                 await loadSongs();
                 alert('楽曲を削除しました');
@@ -306,7 +264,6 @@
             currentPage = page;
             selectedSong = null;
             editingSong = null;
-            uploadedImageFile = null;
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('bg-white', 'text-purple-900');
                 btn.classList.add('bg-white', 'bg-opacity-20', 'text-white');
@@ -319,7 +276,6 @@
         // 楽曲追加開始
         window.startAddSong = () => {
             editingSong = {};
-            uploadedImageFile = null;
             renderCurrentPage();
         };
 
