@@ -171,11 +171,11 @@
         // 単曲レート計算
         function calculateRate(score, level) {
             const baseRate = level;
-            const scoreRate = score >= 1007500 ? 2.0 :
-                             score >= 1005000 ? 1.5 :
-                             score >= 1000000 ? 1.0 :
-                             score >= 975000 ? 0.5 :
-                             score >= 950000 ? 0 : -0.5;
+            const scoreRate = score >= 999000 ? level + (2 + (score - 999000) / 10000) / 34 :
+                             score >= 995000 ? level + (1.5 + (score - 995000) / 8000) / 34 :
+                             score >= 990000 ? level + (1 + (score - 990000 ) / 10000) / 34 :
+                             score >= 970000 ? level + ((score - 970000) / 20000) / 34 :
+                             score >= 800000 ? level * ((score - 800000 ) / 170000) / 34 : 0;
             return (baseRate + scoreRate).toFixed(2);
         }
 
