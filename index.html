@@ -117,24 +117,25 @@
             }
         }
 
-        // ユーザーデータ読み込み
+        // ユーザーデータ読み込み（サブコレクション構造に変更）
         async function loadUserData(userId) {
             try {
                 const userDoc = await getDoc(doc(db, 'users', userId));
                 if (userDoc.exists() && userDoc.data().isAdmin) {
                     isAdmin = true;
-                    window.isAdmin = true; // グローバルに公開
+                    window.isAdmin = true;
                     document.getElementById('adminTab').classList.remove('hidden');
                 }
 
-                const scoresCol = collection(db, 'scores');
-                const q = query(scoresCol, where('userId', '==', userId));
-                const scoreSnapshot = await getDocs(q);
+                // サブコレクションから直接スコアを取得（高速）
+                const scoresCol = collection(db, 'users', userId, 'scores');
+                const scoreSnapshot = await getDocs(scoresCol);
                 userScores = {};
                 scoreSnapshot.docs.forEach(doc => {
                     userScores[doc.id] = doc.data();
                 });
-                window.userScores = userScores; // グローバルに公開
+                window.userScores = userScores;
+                console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
             } catch (error) {
                 console.error("ユーザーデータ読み込みエラー:", error);
             }
@@ -179,14 +180,14 @@
             return (scoreRate).toFixed(3);
         }
 
-        // スコア保存
+        // スコア保存（サブコレクション構造に変更）
         async function saveScore(songId, difficulty, score, level) {
             const rate = calculateRate(parseInt(score), parseFloat(level));
-            const scoreId = `${currentUser.uid}_${songId}_${difficulty}`;
+            const scoreId = `${songId}_${difficulty}`;
 
             try {
-                await setDoc(doc(db, 'scores', scoreId), {
-                    userId: currentUser.uid,
+                // サブコレクションに保存（users/{userId}/scores/{scoreId}）
+                await setDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId), {
                     songId,
                     difficulty,
                     score: parseInt(score),
@@ -205,33 +206,68 @@
             }
         }
 
+        // スコア削除
+        async function deleteScore(scoreId) {
+            if (!confirm('このスコアを削除しますか？')) return;
+            
+            try {
+                await deleteDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId));
+                delete userScores[scoreId];
+                alert('スコアを削除しました');
+                renderCurrentPage();
+            } catch (error) {
+                console.error("スコア削除エラー:", error);
+                alert('スコアの削除に失敗しました');
+            }
+        }
+
         // 楽曲保存
         async function saveSong(songData) {
-            try {
-                const songId = songData.id || `song_${Date.now()}`;
-                let imageUrl = songData.imageUrl || '';
-                let imagePath = songData.imagePath || '';
+            const songId = songData.id || `song_${Date.now()}`;
+            let imageUrl = songData.imageUrl || '';
+            let imagePath = songData.imagePath || '';
 
+            try {
                 // 新しい画像がアップロードされた場合
                 if (uploadedImageFile) {
+                    console.log('画像アップロード開始...');
+                    
                     // 古い画像を削除
                     if (songData.imagePath) {
-                        await deleteOldImage(songData.imagePath);
+                        try {
+                            await deleteOldImage(songData.imagePath);
+                        } catch (error) {
+                            console.warn('古い画像の削除に失敗しました:', error);
+                        }
                     }
                     
                     // 新しい画像をアップロード
-                    const imageData = await uploadImage(uploadedImageFile, songId);
-                    imageUrl = imageData.url;
-                    imagePath = imageData.path;
+                    try {
+                        const imageData = await uploadImage(uploadedImageFile, songId);
+                        imageUrl = imageData.url;
+                        imagePath = imageData.path;
+                        console.log('画像アップロード完了:', imageUrl);
+                    } catch (error) {
+                        console.error('画像アップロードエラー:', error);
+                        if (error.code === 'storage/unauthorized') {
+                            throw new Error('Firebase Storageが有効化されていません。Firebase Consoleで Storage を有効化してください。');
+                        }
+                        throw new Error('画像のアップロードに失敗しました: ' + error.message);
+                    }
                 }
 
+                // Firestoreに保存
+                console.log('楽曲データ保存開始...');
                 await setDoc(doc(db, 'songs', songId), {
                     title: songData.title,
                     artist: songData.artist,
                     difficulties: songData.difficulties,
                     imageUrl: imageUrl,
-                    imagePath: imagePath
+                    imagePath: imagePath,
+                    createdAt: songData.createdAt || new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
                 });
+                console.log('楽曲データ保存完了');
 
                 await loadSongs();
                 editingSong = null;
@@ -240,7 +276,7 @@
                 renderCurrentPage();
             } catch (error) {
                 console.error("楽曲保存エラー:", error);
-                alert('楽曲の保存に失敗しました');
+                throw error;
             }
         }
 
@@ -419,13 +455,13 @@
 
             const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
             const scoresWithSongInfo = Object.entries(userScores)
-                .map(([id, score]) => ({ ...score, song: songMap[score.songId] }))
+                .map(([id, score]) => ({ ...score, song: songMap[score.songId], scoreId: id }))
                 .filter(s => s.song)
                 .sort((a, b) => parseFloat(b.rate) - parseFloat(a.rate));
 
             container.innerHTML = `
                 <div class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
                             <div class="text-sm text-gray-600 mb-1">Rating</div>
                             <div class="text-3xl font-bold text-red-700">${totalRate}</div>
@@ -462,6 +498,11 @@
                                         <div class="font-bold text-lg text-purple-700">Rate: ${score.rate}</div>
                                         <div class="text-sm text-gray-600">${score.score.toLocaleString()}</div>
                                     </div>
+                                    <button onclick="deleteScore('${score.scoreId}')" class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition flex-shrink-0" title="削除">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                    </button>
                                 </div>
                             `).join('')}
                         </div>
@@ -581,7 +622,7 @@
                         </div>
 
                         <div class="flex gap-3">
-                            <button onclick="submitSong()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition">
+                            <button id="saveSongButton" onclick="submitSong()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
                                 保存
                             </button>
                             <button onclick="cancelEditSong()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 rounded-lg transition">
@@ -682,20 +723,40 @@
                 if (value) difficulties[diff] = parseFloat(value);
             });
 
-            // 保存中メッセージ
-            if (uploadedImageFile) {
-                alert('画像をアップロード中です。しばらくお待ちください...');
+            // 難易度が1つも設定されていない場合の警告
+            if (Object.keys(difficulties).length === 0) {
+                if (!confirm('難易度が1つも設定されていません。このまま保存しますか？')) {
+                    return;
+                }
             }
 
-            await saveSong({
-                ...editingSong,
-                title,
-                artist,
-                difficulties
-            });
+            // 保存ボタンを無効化（二重送信防止）
+            const saveButton = document.getElementById('saveSongButton');
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.textContent = '保存中...';
+            }
+
+            try {
+                await saveSong({
+                    ...editingSong,
+                    title,
+                    artist,
+                    difficulties
+                });
+            } catch (error) {
+                console.error('保存エラー:', error);
+                alert('保存に失敗しました: ' + error.message);
+                // ボタンを元に戻す
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.textContent = '保存';
+                }
+            }
         };
 
         window.deleteSong = deleteSong;
+        window.deleteScore = deleteScore;
         window.renderCurrentPage = renderCurrentPage;
 
         function escapeHtml(text) {
