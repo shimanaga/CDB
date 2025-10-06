@@ -445,54 +445,94 @@ function fillSongGrid() {
 
         // 統計画面
         function renderStatistics(container) {
-            const rates = Object.values(userScores).map(s => parseFloat(s.rate));
-            const topRates = [...rates].sort((a, b) => b - a).slice(0, 40);
-            const totalRate = topRates.length > 0 ? topRates.reduce((a, b) => a + b, 0).toFixed(3) : '0.000';
-            const avgRate = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(3) : '0.000';
+  // ---- メトリクス計算（上位40の合計・平均） ----
+  const rates = Object.values(userScores).map(s => parseFloat(s.rate));
+  const topRates = [...rates].sort((a, b) => b - a).slice(0, 40);
+  const totalRate = topRates.length > 0 ? topRates.reduce((a, b) => a + b, 0).toFixed(3) : '0.000';
+  const avgRate   = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(3) : '0.000';
 
-            const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
-            ${scoresWithSongInfo.map(score => `
-  <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-white bg-opacity-90 rounded-lg shadow-sm">
-    <!-- 左: サムネ -->
-    ${score.song.imageUrl ? `
-      <img src="${score.song.imageUrl}"
-           alt="${escapeHtml(score.song.title)}"
-           class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 object-cover rounded" />
-    ` : `
-      <div class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center">
-        <svg class="w-8 h-8 text-white opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-        </svg>
+  // ---- スコア行データ（曲情報を付与して並べ替え）----
+  const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
+  const scoresWithSongInfo = Object.entries(userScores)
+    .map(([id, sc]) => ({ ...sc, song: songMap[sc.songId], scoreId: id }))
+    .sort((a, b) => b.rate - a.rate);
+
+  // ---- 描画 ----
+  container.innerHTML = `
+    <!-- 上部メトリクス（スマホで2列→sm以上で3列） -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+      <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+        <div class="text-xs text-gray-500">総合レート（上位40合計）</div>
+        <div class="text-xl font-bold text-purple-700">${totalRate}</div>
       </div>
-    `}
-
-    <!-- 中: タイトル等（min-w-0 で truncate を効かせる） -->
-    <div class="flex-1 min-w-0">
-      <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song.title)}</div>
-      <div class="text-xs sm:text-sm text-gray-600 truncate">
-        ${score.difficulty} Lv.${Number(score.level).toFixed(1)}
+      <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+        <div class="text-xs text-gray-500">上位40平均レート</div>
+        <div class="text-xl font-bold text-purple-700">${avgRate}</div>
+      </div>
+      <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center col-span-2 sm:col-span-1">
+        <div class="text-xs text-gray-500">登録スコア数</div>
+        <div class="text-xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
       </div>
     </div>
 
-    <!-- 右: 値と削除（モバイルでは下段に回る／SM以上は右端固定） -->
-    <div class="flex items-center justify-between sm:justify-end gap-3 sm:ml-4 shrink-0 w-full sm:w-auto">
-      <div class="text-right flex-1 sm:flex-none min-w-0">
-        <div class="font-bold text-base sm:text-lg text-purple-700 leading-tight">Rate: ${score.rate}</div>
-        <div class="text-xs sm:text-sm text-gray-600 leading-tight">${score.score.toLocaleString()}</div>
-      </div>
-      <button
-        class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm rounded-md transition shrink-0"
-        title="削除"
-        onclick="deleteScore('${score.scoreId}')"
-      >
-        削除
-      </button>
-    </div>
-  </div>
-`).join('')}
+    <!-- スコア一覧 -->
+    <div id="scoreList" class="space-y-2">
+      ${
+        scoresWithSongInfo.map((score, idx) => `
+          ${scoresWithSongInfo.length > 40 && idx === 40 ? `
+            <div class="relative my-3">
+              <div class="border-t border-gray-300"></div>
+              <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-white bg-opacity-90 px-3 text-xs text-gray-500">
+                BEST 40
+              </div>
+            </div>
+          ` : ''}
 
-        }
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-white bg-opacity-90 rounded-lg shadow-sm">
+            <!-- 左: サムネ -->
+            ${
+              score.song?.imageUrl ? `
+                <img src="${score.song.imageUrl}"
+                     alt="${escapeHtml(score.song.title || '')}"
+                     class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 object-cover rounded" />
+              ` : `
+                <div class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center">
+                  <svg class="w-8 h-8 text-white opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                  </svg>
+                </div>
+              `
+            }
+
+            <!-- 中: タイトル等（truncate させるため min-w-0） -->
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song?.title || '(不明な曲)')}</div>
+              <div class="text-xs sm:text-sm text-gray-600 truncate">
+                ${escapeHtml(score.difficulty)} Lv.${Number(score.level).toFixed(1)}
+              </div>
+            </div>
+
+            <!-- 右: 値と削除（モバイルでは下段に回る／sm以上は右端固定） -->
+            <div class="flex items-center justify-between sm:justify-end gap-3 sm:ml-4 shrink-0 w-full sm:w-auto">
+              <div class="text-right flex-1 sm:flex-none min-w-0">
+                <div class="font-bold text-base sm:text-lg text-purple-700 leading-tight">Rate: ${score.rate}</div>
+                <div class="text-xs sm:text-sm text-gray-600 leading-tight">${Number(score.score).toLocaleString()}</div>
+              </div>
+              <button
+                class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm rounded-md transition shrink-0"
+                title="削除"
+                onclick="deleteScore('${score.scoreId}')"
+              >
+                削除
+              </button>
+            </div>
+          </div>
+        `).join('')
+      }
+    </div>
+  `;
+}
 
         // 管理画面
         function renderAdmin(container) {
