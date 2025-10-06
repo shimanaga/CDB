@@ -232,17 +232,22 @@
 
         // ページ切り替え
         function switchPage(page) {
-            currentPage = page;
-            selectedSong = null;
-            editingSong = null;
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('bg-white', 'text-purple-900');
-                btn.classList.add('bg-white', 'bg-opacity-20', 'text-white');
-            });
-            document.getElementById(`${page}Tab`).classList.remove('bg-opacity-20');
-            document.getElementById(`${page}Tab`).classList.add('bg-white', 'text-purple-900');
-            renderCurrentPage();
-        }
+          currentPage = page;
+          selectedSong = null;
+          editingSong = null;
+
+          document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('bg-white', 'bg-opacity-20', 'text-white', 'text-purple-900');
+            btn.classList.add('bg-white', 'bg-opacity-20', 'text-white');
+          });
+
+  const active = document.getElementById(`${page}Tab`);
+  if (active) {
+    active.classList.remove('bg-opacity-20', 'text-white');
+    active.classList.add('bg-white', 'text-purple-900');
+  }
+  renderCurrentPage();
+}
 
         // 楽曲追加開始
         window.startAddSong = () => {
@@ -326,8 +331,8 @@
             const song = selectedSong;
             container.innerHTML = `
                 <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
-                    <button onclick="selectedSong = null; renderCurrentPage();" class="mb-4 text-purple-700 hover:text-purple-900 font-semibold">
-                        ← 戻る
+                    <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-700 hover:text-purple-900 font-semibold">
+                      ← 戻る
                     </button>
                     
                     ${song.imageUrl ? `
@@ -356,7 +361,7 @@
                         <div id="scoreInputs" class="hidden space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">スコア</label>
-                                <input type="number" id="scoreInput" placeholder="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                                <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                             </div>
 
                             <div>
@@ -405,31 +410,42 @@
 
                     <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6">
                         <h3 class="text-xl font-bold text-gray-800 mb-4">スコア一覧</h3>
-                        <div class="space-y-2 max-h-96 overflow-y-auto">
-                            ${scoresWithSongInfo.map(score => `
-                                <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                        <div class="space-y-2">
+                            ${scoresWithSongInfo.map((score, idx) => `
+                              ${scoresWithSongInfo.length > 40 && idx === 40 ? `
+                                <div class="relative my-4">
+                                  <div class="border-t border-gray-300"></div>
+                                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-white bg-opacity-90 px-3 text-xs text-gray-500">
+                                        BEST 40
+                                      </div>
+                                    </div>
+                                  ` : ''}
+
+                                  <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
                                     ${score.song.imageUrl ? `
-                                        <img src="${score.song.imageUrl}" alt="${escapeHtml(score.song.title)}" class="w-16 h-16 object-cover rounded" />
+                                      <img src="${score.song.imageUrl}" alt="${escapeHtml(score.song.title)}" class="w-16 h-16 object-cover rounded" />
                                     ` : `
-                                        <div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center flex-shrink-0">
-                                            <svg class="w-8 h-8 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                                            </svg>
+                                      <div class="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center flex-shrink-0">
+                                        <svg class="w-8 h-8 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                                        　</svg>
                                         </div>
-                                    `}
-                                    <div class="flex-1 min-w-0">
-                                        <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song.title)}</div>
-                                        <div class="text-sm text-gray-600">${score.difficulty} ${Number(score.level).toFixed(1)}</div>
-                                    </div>
-                                    <div class="text-right flex-shrink-0">
-                                        <div class="font-bold text-lg text-purple-700">Rate: ${score.rate}</div>
-                                        <div class="text-sm text-gray-600">${score.score.toLocaleString()}</div>
-                                    </div>
-                                    <button onclick="deleteScore('${score.scoreId}')" class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition flex-shrink-0" title="削除">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
+                                    　`}
+                                    　<div class="flex-1 min-w-0">
+                                          <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song.title)}</div>
+                                          <div class="text-sm text-gray-600">${score.difficulty} ${Number(score.level).toFixed(1)}</div>
+                                    　</div>
+                                    　<div class="text-right flex-shrink-0">
+                                          <div class="font-bold text-lg text-purple-700">Rate: ${score.rate}</div>
+                                        　<div class="text-sm text-gray-600">${score.score.toLocaleString()}</div>
+                                    　</div>
+                                    　<button onclick="deleteScore('${score.scoreId}')" class="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition flex-shrink-0" title="削除">
+                                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                          </svg>
+                                    　</button>
                                 </div>
                             `).join('')}
                         </div>
@@ -463,11 +479,11 @@
                                     <p class="text-sm mt-2">「新規追加」ボタンから楽曲を追加してください</p>
                                 </div>
                             ` : `
-                                <div class="space-y-2 max-h-96 overflow-y-auto">
+                                <div class="space-y-2">
                                     ${songs.map(song => `
                                         <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
                                             ${song.imageUrl ? `
-                                                <img id="previewImage" src="${song.imageUrl}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                                <img src="${song.imageUrl}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                                     <div class="w-32 h-32 bg-gray-200 rounded-lg items-center justify-center flex-shrink-0" style="display:none;">
                                                         <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -514,7 +530,7 @@
                             <label class="block text-sm font-semibold text-gray-700 mb-2">ジャケット画像</label>
                             <div class="flex items-center gap-4">
                                 ${song.imageUrl ? `
-                                    <img id="previewImage" src="${song.imageUrl}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" />
+                                    <img src="${song.imageUrl}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" />
                                 ` : `
                                     <div id="previewImage" class="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                                         <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -567,34 +583,45 @@
         }
 
         // 画像プレビュー更新
+        // 画像プレビュー更新（置き換え）
         window.updateImagePreview = (url) => {
-            const preview = document.getElementById('previewImage');
-            if (!url) {
-                if (preview.tagName === 'IMG') {
-                    preview.outerHTML = `
-                        <div id="previewImage" class="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                        </div>`;
-                }
-                return;
-            }
-    
-            if (preview.tagName === 'DIV') {
-                preview.outerHTML = `<img id="previewImage" src="${url}" alt="Preview" class="w-32 h-32 object-cover rounded-lg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                <div class="w-32 h-32 bg-gray-200 rounded-lg items-center justify-center flex-shrink-0" style="display:none;">
-                    <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
+          const preview = document.getElementById('previewImage');
+          if (!preview) return;
+
+          if (!url) {
+            if (preview.tagName === 'IMG') {
+              // フォールバックを増やさないよう、先に隣のフォールバックを除去
+              const fallback = preview.nextElementSibling;
+              if (fallback) fallback.remove();
+
+              preview.outerHTML = `
+                <div id="previewImage" class="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
                 </div>`;
-            } else {
-                preview.src = url;
-                preview.style.display = 'block';
-                const fallback = preview.nextElementSibling;
-                if (fallback) fallback.style.display = 'none';
             }
+            return;
+          }
+
+          if (preview.tagName === 'DIV') {
+            preview.outerHTML = `<img id="previewImage" src="${url}" alt="Preview" class="w-32 h-32 object-cover rounded-lg"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+              <div class="w-32 h-32 bg-gray-200 rounded-lg items-center justify-center flex-shrink-0" style="display:none;">
+                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+              </div>`;
+          } else {
+            preview.src = url;
+            preview.style.display = 'block';
+            const fallback = preview.nextElementSibling;
+            if (fallback) fallback.style.display = 'none';
+          }
         };
+
     
         // グローバル関数
         window.selectSong = (songId) => {
@@ -603,32 +630,44 @@
         };
 
         window.selectDifficulty = (diff, level) => {
-            window.selectedDifficulty = diff;
-            document.getElementById('levelInput').value = Number(level).toFixed(1);
-            document.getElementById('scoreInputs').classList.remove('hidden');
-            
-            DIFFICULTIES.forEach(d => {
-                const btn = document.getElementById(`diff_${d}`);
-                if (btn) {
-                    if (d === diff) {
-                        btn.classList.remove('bg-opacity-50');
-                        btn.classList.add('bg-opacity-100');
-                    } else {
-                        btn.classList.remove('bg-opacity-100');
-                        btn.classList.add('bg-opacity-50');
-                    }
-                }
-            });
+          window.selectedDifficulty = diff;
+          window.selectedLevel = Number(level);
+          document.getElementById('scoreInputs').classList.remove('hidden');
+
+          DIFFICULTIES.forEach(d => {
+            const btn = document.getElementById(`diff_${d}`);
+            if (!btn) return;
+            if (d === diff) {
+              btn.classList.remove('bg-opacity-50');
+              btn.classList.add('bg-opacity-100');
+            } else {
+              btn.classList.remove('bg-opacity-100');
+              btn.classList.add('bg-opacity-50');
+            }
+          });
         };
 
+        // スコア保存（置き換え）
         window.submitScore = () => {
-            const score = document.getElementById('scoreInput').value;
-            const level = document.getElementById('levelInput').value;
-            if (!window.selectedDifficulty || !score || !level) {
-                alert('すべての項目を入力してください');
-                return;
-            }
-            saveScore(selectedSong.id, window.selectedDifficulty, score, level);
+          const raw = document.getElementById('scoreInput').value;
+          if (!window.selectedDifficulty) {
+            alert('難易度を選択してください');
+            return;
+          }
+          // 0〜1,000,000にバリデーション
+          const scoreNum = Math.max(0, Math.min(1000000, parseInt(raw || '0', 10)));
+          if (Number.isNaN(scoreNum)) {
+            alert('スコアが数値ではありません');
+            return;
+          }
+          saveScore(selectedSong.id, window.selectedDifficulty, scoreNum, window.selectedLevel);
+        };
+
+        window.goBackFromScore = () => {
+          selectedSong = null;
+          window.selectedDifficulty = null;
+          window.selectedLevel = null;
+          renderCurrentPage();
         };
 
         window.editSong = (song) => {
