@@ -306,16 +306,16 @@ function renderSongList(container) {
     <!-- 検索欄（固定。以降は再描画しない） -->
     <div class="mb-6">
   <div class="relative">
-    <!-- 左アイコン（絶対配置） -->
+    <!-- 🔍 左アイコン -->
     <svg
       aria-hidden="true"
-      class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+      class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 z-10"
       viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/>
     </svg>
 
-    <!-- 入力欄（左パディングをアイコン分だけ確保） -->
+    <!-- 入力欄（左パディングはアイコン幅＋余白分） -->
     <input
       type="text"
       id="searchInput"
@@ -929,19 +929,22 @@ window.submitScore = () => {
                 <div class="flex items-center justify-between flex-wrap gap-4">
                     <div>
                         <h1 class="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-     class="w-8 h-8 text-white" role="img" aria-label="App icon: cube">
-  <!-- 外形 -->
+                            <!-- 抽象キューブ・ロゴ（強化版） -->
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     class="w-8 h-8 text-white" role="img" aria-label="App icon: cube+core">
+  <!-- 外枠キューブ -->
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M12 2l8 4.5v11L12 22l-8-4.5v-11L12 2z"/>
-  <!-- 上面の割線 -->
+  <!-- 上面のエッジ -->
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M4 6.5l8 4 8-4"/>
-  <!-- 中心の芯 -->
+  <!-- 内側の小キューブ（コア） -->
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-        d="M12 22V10.5"/>
+        d="M12 8l4 2.25v4.5L12 17l-4-2.25v-4.5L12 8z"/>
+  <!-- 斜めのハイライト（右上へ抜ける軽いアクセント） -->
+  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 8l4-2"/>
 </svg>
-
                             TAKUMI³ Player DB
                         </h1>
                         <div id="userIdDisplay" class="mt-2"></div>
