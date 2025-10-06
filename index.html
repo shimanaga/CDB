@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged, getIdTokenResult, onIdTokenChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase設定（あなたの設定値に置き換えてください）
@@ -48,10 +48,11 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user;
+// Fetch custom claims and toggle admin tab (token refresh)
+const { claims } = await getIdTokenResult(user, true);
+isAdmin = !!claims.admin;
+document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
                         window.currentUser = user; // グローバルに公開
-                        
-                        // ユーザーIDを表示
-                        displayUserId(user.uid);
                         
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('app').classList.remove('hidden');
@@ -60,6 +61,19 @@
                         renderCurrentPage();
                     }
                 });
+
+// Listen for claim updates
+onIdTokenChanged(auth, async (user) => {
+  if (!user) return;
+  const { claims } = await getIdTokenResult(user);
+  const newIsAdmin = !!claims.admin;
+  if (newIsAdmin !== isAdmin) {
+    isAdmin = newIsAdmin;
+    document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
+    if (!isAdmin && currentPage === 'admin') switchPage('score');
+  }
+});
+
             } catch (error) {
                 console.error("Firebase初期化エラー:", error);
                 document.getElementById('loading').innerHTML = `
@@ -75,27 +89,38 @@
         }
 
         // ユーザーID表示
-        function displayUserId(uid) {
-            const display = document.getElementById('userIdDisplay');
-            if (display) {
-                display.innerHTML = `
-                    <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
-                        <span class="text-yellow-300 text-xs">プレイヤーID:</span>
-                        <span class="text-yellow-100 font-mono text-sm ml-2">非表示</span>
-                        <button onclick="copyUserId('${uid}')" class="ml-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs px-2 py-1 rounded">
-                            コピー
-                        </button>
-                    </div>
-                `;
-            }
+        function displayUserId(uid, username) {
+    const display = document.getElementById('userIdDisplay');
+    if (display) {
+        if (username) {
+            // ユーザー名が登録されている場合
+            display.innerHTML = `
+                <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
+                    <span class="text-yellow-300 text-xs">プレイヤーID:</span>
+                    <span class="text-yellow-100 font-semibold text-sm ml-2">${escapeHtml(username)}</span>
+                </div>
+            `;
+        } else {
+            // ユーザー名が未登録の場合（従来通り）
+            display.innerHTML = `
+                <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
+                    <span class="text-yellow-300 text-xs">プレイヤーID:</span>
+                    <span class="text-yellow-100 font-mono text-sm ml-2">非表示</span>
+                    <button onclick="copyUserId('${uid}')" class="ml-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs px-2 py-1 rounded">
+                        コピー
+                    </button>
+                </div>
+            `;
         }
+    }
+}
 
         // ユーザーIDコピー
         window.copyUserId = (uid) => {
-            navigator.clipboard.writeText(uid).then(() => {
-                alert('ユーザーIDをコピーしました！\n\nFirestoreの users コレクションで\nこのIDをドキュメントIDとして使用し、\nisAdmin: true を設定してください。');
-            });
-        };
+  navigator.clipboard.writeText(uid).then(() => {
+    alert('ユーザーIDをコピーしました。サポート/管理者にお知らせください。');
+  });
+};
 
         // 楽曲データ読み込み
         async function loadSongs() {
@@ -115,27 +140,30 @@
 
         // ユーザーデータ読み込み（サブコレクション構造に変更）
         async function loadUserData(userId) {
-            try {
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                if (userDoc.exists() && userDoc.data().isAdmin) {
-                    isAdmin = true;
-                    window.isAdmin = true;
-                    document.getElementById('adminTab').classList.remove('hidden');
-                }
-
-                // サブコレクションから直接スコアを取得（高速）
-                const scoresCol = collection(db, 'users', userId, 'scores');
-                const scoreSnapshot = await getDocs(scoresCol);
-                userScores = {};
-                scoreSnapshot.docs.forEach(doc => {
-                    userScores[doc.id] = doc.data();
-                });
-                window.userScores = userScores;
-                console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
-            } catch (error) {
-                console.error("ユーザーデータ読み込みエラー:", error);
-            }
+    try {
+        // ユーザー名を取得
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        let username = null;
+        if (userDoc.exists()) {
+            username = userDoc.data().username || null;
         }
+        
+        // ユーザーIDとユーザー名を表示（username優先）
+        displayUserId(userId, username);
+        
+        // サブコレクションから直接スコアを取得（高速）
+        const scoresCol = collection(db, 'users', userId, 'scores');
+        const scoreSnapshot = await getDocs(scoresCol);
+        userScores = {};
+        scoreSnapshot.docs.forEach(doc => {
+            userScores[doc.id] = doc.data();
+        });
+        window.userScores = userScores;
+        console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
+    } catch (error) {
+        console.error("ユーザーデータ読み込みエラー:", error);
+    }
+}
 
         // 単曲レート計算
         function calculateRate(score, level) {
@@ -291,7 +319,15 @@ async function saveScore(songId, difficulty, score, level) {
             } else if (currentPage === 'stats') {
                 renderStatistics(content);
             } else if (currentPage === 'admin') {
-                renderAdmin(content);
+                
+if (!isAdmin) {
+  content.innerHTML = `
+    <div class="bg-white bg-opacity-90 rounded-lg p-6 text-center text-red-600 font-semibold">
+      403 Forbidden — 管理者のみアクセスできます
+    </div>`;
+  return;
+}
+renderAdmin(content);
             }
         }
 
