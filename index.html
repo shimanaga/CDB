@@ -148,31 +148,53 @@
             return (scoreRate).toFixed(3);
         }
 
-        // スコア保存（サブコレクション構造に変更）
-        async function saveScore(songId, difficulty, score, level) {
-            const rate = calculateRate(parseInt(score), parseFloat(level));
-            const scoreId = `${songId}_${difficulty}`;
+        // スコア保存（サブコレクション構造）
+async function saveScore(songId, difficulty, score, level) {
+  const rate = calculateRate(parseInt(score), parseFloat(level));
+  const scoreId = `${songId}_${difficulty}`;
 
-            try {
-                // サブコレクションに保存（users/{userId}/scores/{scoreId}）
-                await setDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId), {
-                    songId,
-                    difficulty,
-                    score: parseInt(score),
-                    level: parseFloat(level),
-                    rate: parseFloat(rate),
-                    timestamp: new Date().toISOString()
-                });
+  try {
+    await setDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId), {
+      songId,
+      difficulty,
+      score: parseInt(score),
+      level: parseFloat(level),
+      rate: parseFloat(rate),
+      timestamp: new Date().toISOString()
+    });
 
-                userScores[scoreId] = { songId, difficulty, score: parseInt(score), level: parseFloat(level), rate: parseFloat(rate) };
-                alert('スコアを保存しました！');
-                selectedSong = null;
-                renderCurrentPage();
-            } catch (error) {
-                console.error("スコア保存エラー:", error);
-                alert('スコアの保存に失敗しました');
-            }
-        }
+    // ローカル反映
+    userScores[scoreId] = { songId, difficulty, score: parseInt(score), level: parseFloat(level), rate: parseFloat(rate) };
+
+    // ✅ トースト通知（一覧に戻さない）
+    showToast('スコアを保存しました', 'success');
+
+    // 次の難易度を入れやすいよう入力状態をリセット
+    window.selectedDifficulty = null;
+    window.selectedLevel = null;
+    const input = document.getElementById('scoreInput');
+    if (input) input.value = '';
+
+    // 難易度ボタンのハイライト解除 & 入力欄を一旦隠す
+    if (typeof DIFFICULTIES !== 'undefined') {
+      DIFFICULTIES.forEach(d => {
+        const btn = document.getElementById(`diff_${d}`);
+        if (btn) { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
+      });
+    }
+    const inputs = document.getElementById('scoreInputs');
+    if (inputs) inputs.classList.add('hidden');
+
+    // 画面はスコア登録のまま（同じ曲）。必要なら再描画だけ行う
+    if (currentPage === 'score' && selectedSong && selectedSong.id === songId) {
+      const content = document.getElementById('content');
+      if (typeof renderScoreEntry === 'function' && content) renderScoreEntry(content);
+    }
+  } catch (error) {
+    console.error('スコア保存エラー:', error);
+    showToast('スコアの保存に失敗しました', 'error');
+  }
+}
 
         // スコア削除
         async function deleteScore(scoreId) {
@@ -181,7 +203,7 @@
             try {
                 await deleteDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId));
                 delete userScores[scoreId];
-                alert('スコアを削除しました');
+                showToast('楽曲を保存しました', 'success')
                 renderCurrentPage();
             } catch (error) {
                 console.error("スコア削除エラー:", error);
@@ -209,7 +231,7 @@
 
                 await loadSongs();
                 editingSong = null;
-                alert('楽曲を保存しました！');
+                showToast('楽曲を保存しました', 'success')
                 renderCurrentPage();
             } catch (error) {
                 console.error("楽曲保存エラー:", error);
@@ -425,7 +447,7 @@ function fillSongGrid() {
         function renderStatistics(container) {
             const rates = Object.values(userScores).map(s => parseFloat(s.rate));
             const topRates = [...rates].sort((a, b) => b - a).slice(0, 40);
-            const totalRate = topRates.length > 0 ? topRates.reduce((a, b) => a + b, 0).toFixed(4) : '0.0000';
+            const totalRate = topRates.length > 0 ? topRates.reduce((a, b) => a + b, 0).toFixed(3) : '0.000';
             const avgRate = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(3) : '0.000';
 
             const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
@@ -706,20 +728,22 @@ function fillSongGrid() {
         };
 
         // スコア保存（置き換え）
-        window.submitScore = () => {
-          const raw = document.getElementById('scoreInput').value;
-          if (!window.selectedDifficulty) {
-            alert('難易度を選択してください');
-            return;
-          }
-          // 0〜1,000,000にバリデーション
-          const scoreNum = Math.max(0, Math.min(1000000, parseInt(raw || '0', 10)));
-          if (Number.isNaN(scoreNum)) {
-            alert('スコアが数値ではありません');
-            return;
-          }
-          saveScore(selectedSong.id, window.selectedDifficulty, scoreNum, window.selectedLevel);
-        };
+        // スコア保存（バリデーション含む）
+window.submitScore = () => {
+  const raw = document.getElementById('scoreInput').value;
+
+  if (!window.selectedDifficulty) {
+    showToast('難易度を選択してください', 'warn');
+    return;
+  }
+  // 0〜1,000,000にバリデーション（キーボード入力対策済みでも最終防衛）
+  const scoreNum = Math.max(0, Math.min(1000000, parseInt(raw || '0', 10)));
+  if (Number.isNaN(scoreNum)) {
+    showToast('スコアが数値ではありません', 'warn');
+    return;
+  }
+  saveScore(selectedSong.id, window.selectedDifficulty, scoreNum, window.selectedLevel);
+};
 
         window.goBackFromScore = () => {
           selectedSong = null;
@@ -820,7 +844,32 @@ function fillSongGrid() {
           // グリッドだけを差し替える
           if (typeof fillSongGrid === 'function') fillSongGrid();
         };
-
+        // --- toast: 一時バナー表示（alert の代替） ---
+(function(){
+  function ensureToastContainer() {
+    let c = document.getElementById('toastContainer');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'toastContainer';
+      c.className = 'fixed top-4 left-1/2 -translate-x-1/2 transform z-50 space-y-2';
+      document.body.appendChild(c);
+    }
+    return c;
+  }
+  window.showToast = (msg, type='info', ms=1800) => {
+    const c = ensureToastContainer();
+    const bg = type==='success' ? 'bg-green-600'
+            : type==='error'   ? 'bg-red-600'
+            : type==='warn'    ? 'bg-amber-600'
+            : 'bg-gray-800';
+    const el = document.createElement('div');
+    el.className = `${bg} text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 opacity-0`;
+    el.textContent = msg;
+    c.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; });
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, ms);
+  };
+})();
     </script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
