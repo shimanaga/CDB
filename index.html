@@ -305,20 +305,30 @@ function renderSongList(container) {
   container.innerHTML = `
     <!-- 検索欄（固定。以降は再描画しない） -->
     <div class="mb-6">
-      <div class="relative">
-        <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/>
-        </svg>
-        <input
-          type="text"
-          id="searchInput"
-          placeholder="楽曲名・アーティスト名・タグで検索"
-          class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          value="${escapeHtml(rawTerm)}"
-          oninput="handleSongSearch(this.value)"
-        />
-      </div>
-    </div>
+  <div class="relative">
+    <!-- 左アイコン（絶対配置） -->
+    <svg
+      aria-hidden="true"
+      class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+      viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/>
+    </svg>
+
+    <!-- 入力欄（左パディングをアイコン分だけ確保） -->
+    <input
+      type="text"
+      id="searchInput"
+      placeholder="楽曲名・アーティスト名・タグで検索"
+      class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      value="${escapeHtml(rawTerm)}"
+      oninput="handleSongSearch(this.value)"
+      autocomplete="off"
+      spellcheck="false"
+      aria-label="楽曲を検索"
+    />
+  </div>
+</div>
 
     <!-- 楽曲カードの挿入先（ここだけ動的に入れ替える） -->
     <div id="songGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
@@ -919,9 +929,19 @@ window.submitScore = () => {
                 <div class="flex items-center justify-between flex-wrap gap-4">
                     <div>
                         <h1 class="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
-                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                            </svg>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     class="w-8 h-8 text-white" role="img" aria-label="App icon: cube">
+  <!-- 外形 -->
+  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 2l8 4.5v11L12 22l-8-4.5v-11L12 2z"/>
+  <!-- 上面の割線 -->
+  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M4 6.5l8 4 8-4"/>
+  <!-- 中心の芯 -->
+  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 22V10.5"/>
+</svg>
+
                             TAKUMI³ Player DB
                         </h1>
                         <div id="userIdDisplay" class="mt-2"></div>
