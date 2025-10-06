@@ -346,10 +346,6 @@ function _renderSongTiles(arr) {
               : ''
           ).join('')}
         </div>
-        ${Array.isArray(song.tags) && song.tags.length
-          ? `<div class="mt-2 text-xs text-gray-500 truncate">${escapeHtml(song.tags.join(', '))}</div>`
-          : ''
-        }
       </div>
     </div>
   `).join('');
