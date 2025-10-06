@@ -276,7 +276,7 @@
         // 楽曲リスト表示
         // --- replace START: renderSongList ---
 function renderSongList(container) {
-  // 表示用のそのままの値（小文字化しない）
+  // 表示用（小文字化しない）
   const domTerm = document.getElementById('searchInput')?.value || '';
   const rawTerm = (window.songSearchTerm ?? domTerm) || '';
 
@@ -316,8 +316,7 @@ function _filterSongs(rawTerm) {
   return songs.filter(song => {
     const t = _norm(song.title);
     const a = _norm(song.artist);
-    const tagsArr = Array.isArray(song.tags) ? song.tags
-                  : (song.tags ? [song.tags] : []);
+    const tagsArr = Array.isArray(song.tags) ? song.tags : (song.tags ? [song.tags] : []);
     const tagHit = tagsArr.some(tag => _norm(tag).includes(q));
     return t.includes(q) || a.includes(q) || tagHit;
   });
@@ -368,6 +367,7 @@ function fillSongGrid() {
 // 入力時はグリッドだけ差し替える（検索欄のDOMは再生成しない）
 window.handleSongSearch = (v) => {
   window.songSearchTerm = v;
+  // ★ ここで renderSongList() を呼ばないこと
   fillSongGrid();
 };
 // --- add END: song search helpers ---
