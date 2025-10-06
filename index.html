@@ -363,13 +363,6 @@ function fillSongGrid() {
   const filtered = _filterSongs(rawTerm);
   grid.innerHTML = _renderSongTiles(filtered);
 }
-
-// 入力時はグリッドだけ差し替える（検索欄のDOMは再生成しない）
-window.handleSongSearch = (v) => {
-  window.songSearchTerm = v;
-  // ★ ここで renderSongList() を呼ばないこと
-  fillSongGrid();
-};
 // --- add END: song search helpers ---
         
         // スコア入力画面
@@ -826,12 +819,10 @@ window.handleSongSearch = (v) => {
 
         // 追加：検索入力ハンドラ（ページ全体を再描画しない）
         window.handleSongSearch = (v) => {
-          window.songSearchTerm = (v || '').toLowerCase();
-          const container = document.getElementById('content');
-          // いまのタブがスコア登録で曲未選択の場合だけ描画
-          if (typeof renderSongList === 'function' && currentPage === 'score' && !selectedSong) {
-            renderSongList(container);
-          }
+          // 小文字化せずそのまま保持（表示の見た目が崩れないように）
+          window.songSearchTerm = v || '';
+          // グリッドだけを差し替える
+          if (typeof fillSongGrid === 'function') fillSongGrid();
         };
 
     </script>
