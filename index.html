@@ -274,77 +274,104 @@
         }
 
         // 楽曲リスト表示
-        function renderSongList(container) {
-          // 入力欄に表示するための生の値（小文字化しない）
-          const domTerm = document.getElementById('searchInput')?.value || '';
-          const rawTerm = (window.songSearchTerm ?? domTerm) || '';
+        // --- replace START: renderSongList ---
+function renderSongList(container) {
+  // 表示用のそのままの値（小文字化しない）
+  const domTerm = document.getElementById('searchInput')?.value || '';
+  const rawTerm = (window.songSearchTerm ?? domTerm) || '';
 
-          // 検索用に正規化（大小無視・全半角吸収）
-          const norm = s => (s || '').toString().toLowerCase().normalize('NFKC');
-          const q = norm(rawTerm);
+  container.innerHTML = `
+    <!-- 検索欄（固定。以降は再描画しない） -->
+    <div class="mb-6">
+      <div class="relative">
+        <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/>
+        </svg>
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="楽曲名・アーティスト名・タグで検索"
+          class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          value="${escapeHtml(rawTerm)}"
+          oninput="handleSongSearch(this.value)"
+        />
+      </div>
+    </div>
 
-          // 曲名/アーティスト/タグ を対象にフィルタ
-          const filteredSongs = songs.filter(song => {
-            const t = norm(song.title);
-            const a = norm(song.artist);
-            const tagsArr = Array.isArray(song.tags) ? song.tags
-                  : song.tags ? [song.tags] : []; // 万一 string の場合も配列化
-            const tagHit = tagsArr.some(tag => norm(tag).includes(q));
-            return t.includes(q) || a.includes(q) || tagHit;
-          });
+    <!-- 楽曲カードの挿入先（ここだけ動的に入れ替える） -->
+    <div id="songGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  `;
 
-          container.innerHTML = `
-        　<!-- 検索欄: value を保持 & oninput は handleSongSearch に -->
-        　<div class="mb-6">
-              <div class="relative">
-                <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/></svg>
-                    <input
-                      type="text"
-                      id="searchInput"
-                      placeholder="楽曲名・アーティスト名・タグで検索"
-                      class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      value="${escapeHtml(rawTerm)}"
-                      oninput="handleSongSearch(this.value)"
-                    />
-                　</div>
-            　</div>
+  // 初回描画（検索欄は再描画しない）
+  fillSongGrid();
+}
+// --- replace END: renderSongList ---
 
-            　<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  ${filteredSongs.map(song => `
-                    <div onclick="selectSong('${song.id}')" class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-opacity-100 transition transform hover:scale-105 shadow-lg">
-                      ${song.imageUrl ? `
-                        <div class="w-full h-48 bg-gray-200 overflow-hidden">
-                          <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
-                        </div>
-                        ` : `
-                        <div class="w-full h-48 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
-                          <svg class="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                          </svg>
-                        </div>
-                        `}
-                        <div class="p-4">
-                            <h3 class="font-bold text-lg text-gray-800 mb-1 truncate">${escapeHtml(song.title)}</h3>
-                                <p class="text-sm text-gray-600 mb-3 truncate">${escapeHtml(song.artist)}</p>
-                                    <div class="flex flex-wrap gap-1">
-                                      ${DIFFICULTIES.map((diff, idx) => 
-                                        song.difficulties?.[diff] ? 
-                                        `<span class="${DIFFICULTY_COLORS[idx]} text-white text-xs px-2 py-1 rounded font-semibold">${diff}</span>` 
-                                        : ''
-                                    　).join('')}
-                                    </div>
-                                    ${Array.isArray(song.tags) && song.tags.length
-                                      ? `<div class="mt-2 text-xs text-gray-500 truncate">${escapeHtml(song.tags.join(', '))}</div>`
-                                      : ''
-                                    }
-                                  </div>
-                                </div>
-                            `).join('')}
-                            </div>
-                          `;
+        // --- add START: song search helpers ---
+// 正規化（大小＆全半角の違いを吸収）
+const _norm = s => (s || '').toString().toLowerCase().normalize('NFKC');
+
+function _filterSongs(rawTerm) {
+  const q = _norm(rawTerm);
+  return songs.filter(song => {
+    const t = _norm(song.title);
+    const a = _norm(song.artist);
+    const tagsArr = Array.isArray(song.tags) ? song.tags
+                  : (song.tags ? [song.tags] : []);
+    const tagHit = tagsArr.some(tag => _norm(tag).includes(q));
+    return t.includes(q) || a.includes(q) || tagHit;
+  });
+}
+
+function _renderSongTiles(arr) {
+  return arr.map(song => `
+    <div onclick="selectSong('${song.id}')" class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-opacity-100 transition transform hover:scale-105 shadow-lg">
+      ${song.imageUrl ? `
+        <div class="w-full h-48 bg-gray-200 overflow-hidden">
+          <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
+        </div>
+      ` : `
+        <div class="w-full h-48 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+          <svg class="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+          </svg>
+        </div>
+      `}
+      <div class="p-4">
+        <h3 class="font-bold text-lg text-gray-800 mb-1 truncate">${escapeHtml(song.title)}</h3>
+        <p class="text-sm text-gray-600 mb-3 truncate">${escapeHtml(song.artist)}</p>
+        <div class="flex flex-wrap gap-1">
+          ${DIFFICULTIES.map((diff, idx) =>
+            song.difficulties?.[diff]
+              ? `<span class="${DIFFICULTY_COLORS[idx]} text-white text-xs px-2 py-1 rounded font-semibold">${diff}</span>`
+              : ''
+          ).join('')}
+        </div>
+        ${Array.isArray(song.tags) && song.tags.length
+          ? `<div class="mt-2 text-xs text-gray-500 truncate">${escapeHtml(song.tags.join(', '))}</div>`
+          : ''
         }
+      </div>
+    </div>
+  `).join('');
+}
 
+function fillSongGrid() {
+  const grid = document.getElementById('songGrid');
+  if (!grid) return;
+  const domTerm = document.getElementById('searchInput')?.value || '';
+  const rawTerm = (window.songSearchTerm ?? domTerm) || '';
+  const filtered = _filterSongs(rawTerm);
+  grid.innerHTML = _renderSongTiles(filtered);
+}
 
+// 入力時はグリッドだけ差し替える（検索欄のDOMは再生成しない）
+window.handleSongSearch = (v) => {
+  window.songSearchTerm = v;
+  fillSongGrid();
+};
+// --- add END: song search helpers ---
+        
         // スコア入力画面
         function renderScoreEntry(container) {
             const song = selectedSong;
