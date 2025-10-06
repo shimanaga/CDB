@@ -46,12 +46,14 @@
 
                 // 認証状態の監視
                 onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        currentUser = user;
-// Fetch custom claims and toggle admin tab (token refresh)
-const { claims } = await getIdTokenResult(user, true);
-isAdmin = !!claims.admin;
-document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
+  if (user) {
+    currentUser = user;
+
+    // Firestoreのusers/{uid}から管理者フラグを確認
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    isAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
+    document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
+
                         window.currentUser = user; // グローバルに公開
                         
                         document.getElementById('loading').classList.add('hidden');
@@ -62,17 +64,18 @@ document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
                     }
                 });
 
-// Listen for claim updates
+// Firestore上のisAdminが変わったときに反映
 onIdTokenChanged(auth, async (user) => {
   if (!user) return;
-  const { claims } = await getIdTokenResult(user);
-  const newIsAdmin = !!claims.admin;
+  const userDoc = await getDoc(doc(db, "users", user.uid));
+  const newIsAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
   if (newIsAdmin !== isAdmin) {
     isAdmin = newIsAdmin;
     document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
     if (!isAdmin && currentPage === 'admin') switchPage('score');
   }
 });
+
 
             } catch (error) {
                 console.error("Firebase初期化エラー:", error);
