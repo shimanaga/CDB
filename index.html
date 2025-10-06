@@ -203,6 +203,7 @@
                     imageUrl: imageUrl,
                     createdAt: songData.createdAt || new Date().toISOString(),
                     updatedAt: new Date().toISOString()
+                    tags: Array.isArray(songData.tags) ? songData.tags : []
                 });
                 console.log('楽曲データ保存完了');
 
@@ -274,57 +275,75 @@
 
         // 楽曲リスト表示
         function renderSongList(container) {
-            const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
-            const filteredSongs = songs.filter(song =>
-                song.title.toLowerCase().includes(searchTerm) ||
-                song.artist.toLowerCase().includes(searchTerm)
-            );
+          // 入力欄に表示するための生の値（小文字化しない）
+          const domTerm = document.getElementById('searchInput')?.value || '';
+          const rawTerm = (window.songSearchTerm ?? domTerm) || '';
 
-            container.innerHTML = `
-                <div class="mb-6">
-                    <div class="relative">
-                        <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                        <input
-                            type="text"
-                            id="searchInput"
-                            placeholder="楽曲名やアーティスト名で検索..."
-                            class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                            oninput="renderCurrentPage()"
-                        />
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${filteredSongs.map(song => `
-                        <div onclick="selectSong('${song.id}')" class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-opacity-100 transition transform hover:scale-105 shadow-lg">
-                            ${song.imageUrl ? `
-                                <div class="w-full h-48 bg-gray-200 overflow-hidden">
-                                    <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
-                                </div>
-                            ` : `
-                                <div class="w-full h-48 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
-                                    <svg class="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                                    </svg>
-                                </div>
-                            `}
-                            <div class="p-4">
-                                <h3 class="font-bold text-lg text-gray-800 mb-1 truncate">${escapeHtml(song.title)}</h3>
+          // 検索用に正規化（大小無視・全半角吸収）
+          const norm = s => (s || '').toString().toLowerCase().normalize('NFKC');
+          const q = norm(rawTerm);
+
+          // 曲名/アーティスト/タグ を対象にフィルタ
+          const filteredSongs = songs.filter(song => {
+            const t = norm(song.title);
+            const a = norm(song.artist);
+            const tagsArr = Array.isArray(song.tags) ? song.tags
+                  : song.tags ? [song.tags] : []; // 万一 string の場合も配列化
+            const tagHit = tagsArr.some(tag => norm(tag).includes(q));
+            return t.includes(q) || a.includes(q) || tagHit;
+          });
+
+          container.innerHTML = `
+        　<!-- 検索欄: value を保持 & oninput は handleSongSearch に -->
+        　<div class="mb-6">
+              <div class="relative">
+                <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/></svg>
+                    <input
+                      type="text"
+                      id="searchInput"
+                      placeholder="楽曲名・アーティスト名・タグで検索"
+                      class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value="${escapeHtml(rawTerm)}"
+                      oninput="handleSongSearch(this.value)"
+                    />
+                　</div>
+            　</div>
+
+            　<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  ${filteredSongs.map(song => `
+                    <div onclick="selectSong('${song.id}')" class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-opacity-100 transition transform hover:scale-105 shadow-lg">
+                      ${song.imageUrl ? `
+                        <div class="w-full h-48 bg-gray-200 overflow-hidden">
+                          <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
+                        </div>
+                        ` : `
+                        <div class="w-full h-48 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+                          <svg class="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                          </svg>
+                        </div>
+                        `}
+                        <div class="p-4">
+                            <h3 class="font-bold text-lg text-gray-800 mb-1 truncate">${escapeHtml(song.title)}</h3>
                                 <p class="text-sm text-gray-600 mb-3 truncate">${escapeHtml(song.artist)}</p>
-                                <div class="flex flex-wrap gap-1">
-                                    ${DIFFICULTIES.map((diff, idx) => 
+                                    <div class="flex flex-wrap gap-1">
+                                      ${DIFFICULTIES.map((diff, idx) => 
                                         song.difficulties?.[diff] ? 
                                         `<span class="${DIFFICULTY_COLORS[idx]} text-white text-xs px-2 py-1 rounded font-semibold">${diff}</span>` 
                                         : ''
-                                    ).join('')}
+                                    　).join('')}
+                                    </div>
+                                    ${Array.isArray(song.tags) && song.tags.length
+                                      ? `<div class="mt-2 text-xs text-gray-500 truncate">${escapeHtml(song.tags.join(', '))}</div>`
+                                      : ''
+                                    }
+                                  </div>
                                 </div>
+                            `).join('')}
                             </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+                          `;
         }
+
 
         // スコア入力画面
         function renderScoreEntry(container) {
@@ -364,11 +383,6 @@
                                 <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">譜面レベル</label>
-                                <input type="number" step="0.1" id="levelInput" placeholder="12.5" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                            </div>
-
                             <button onclick="submitScore()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition">
                                 スコアを保存
                             </button>
@@ -376,6 +390,19 @@
                     </div>
                 </div>
             `;
+            setTimeout(() => {
+              const input = document.getElementById('scoreInput');
+              if (input) {
+                input.addEventListener('input', () => {
+                  let v = input.value.replace(/[^0-9]/g, '');
+                  if (v === '') return;
+                  let n = parseInt(v, 10);
+                  if (n < 0) n = 0;
+                  if (n > 1000000) n = 1000000;
+                  input.value = n;
+                });
+              }
+            },0);
         }
 
         // 統計画面
@@ -499,6 +526,7 @@
                                             <div class="flex-1 min-w-0">
                                                 <div class="font-semibold text-gray-800 truncate">${escapeHtml(song.title)}</div>
                                                 <div class="text-sm text-gray-600 truncate">${escapeHtml(song.artist)}</div>
+                                                <div class="text-xs text-gray-500 truncate">${escapeHtml((song.tags || []).join(', '))}</div>
                                             </div>
                                             <div class="flex gap-2 flex-shrink-0">
                                                 <button onclick='editSong(${JSON.stringify(song).replace(/'/g, "&apos;")})' class="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition">
@@ -553,6 +581,20 @@
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">アーティスト</label>
                             <input type="text" id="songArtist" value="${escapeHtml(song.artist || '')}" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">検索用タグ（カンマ区切り）</label>
+                            <input
+                                type="text"
+                                id="songTags"
+                                value="${escapeHtml((song.tags || []).join(', '))}"
+                                placeholder="例) Tag, タグ"
+                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            />
+                            <p class="text-xs text-gray-500 mt-1">
+                                検索の別名・読みを登録できます。カンマで区切って複数指定（例: <code>Over limit, オーバーリミット, ≠</code>）
+                            </p>
                         </div>
 
                         <div>
@@ -695,6 +737,12 @@
                 if (value) difficulties[diff] = parseFloat(value);
             });
 
+            const rawTags = (document.getElementById('songTags')?.value || '');
+            const tags = rawTags
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
             // 難易度が1つも設定されていない場合の警告
             if (Object.keys(difficulties).length === 0) {
                 if (!confirm('難易度が1つも設定されていません。このまま保存しますか？')) {
@@ -714,7 +762,8 @@
                     ...editingSong,
                     title,
                     artist,
-                    difficulties
+                    difficulties,
+                    tags
                 });
             } catch (error) {
                 console.error('保存エラー:', error);
@@ -747,6 +796,17 @@
 
         // タブ切り替え関数をグローバルに公開
         window.switchPage = switchPage;
+
+        // 追加：検索入力ハンドラ（ページ全体を再描画しない）
+        window.handleSongSearch = (v) => {
+          window.songSearchTerm = (v || '').toLowerCase();
+          const container = document.getElementById('content');
+          // いまのタブがスコア登録で曲未選択の場合だけ描画
+          if (typeof renderSongList === 'function' && currentPage === 'score' && !selectedSong) {
+            renderSongList(container);
+          }
+        };
+
     </script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
