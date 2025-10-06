@@ -446,10 +446,21 @@ function fillSongGrid() {
         // 統計画面
         function renderStatistics(container) {
   // ---- メトリクス計算（上位40の合計・平均） ----
-  const rates = Object.values(userScores).map(s => parseFloat(s.rate));
-  const topRates = [...rates].sort((a, b) => b - a).slice(0, 40);
-  const totalRate = topRates.length > 0 ? topRates.reduce((a, b) => a + b, 0).toFixed(3) : '0.000';
-  const avgRate   = topRates.length > 0 ? (topRates.reduce((a, b) => a + b, 0) / topRates.length).toFixed(3) : '0.000';
+  // ---- メトリクス計算（上位40合計・平均・B40下限） ----
+const ratesRaw = Object.values(userScores).map(s => Number(s.rate));
+const rates = ratesRaw.filter(n => !Number.isNaN(n));
+const sorted = [...rates].sort((a, b) => b - a);   // 高い順
+const topRates = sorted.slice(0, 40);
+const sumTop = topRates.reduce((a, b) => a + b, 0);
+
+// 総合レート（上位40の合計）
+const totalRate = topRates.length > 0 ? sumTop.toFixed(3) : '0.000';
+
+// 上位40平均レート：登録が40未満でも「残りは0」とみなして 40 で割る
+const avgRate = (sumTop / 40).toFixed(3);
+
+// B40下限（40番目のレート）。登録が39以下なら 0.000
+const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
 
   // ---- スコア行データ（曲情報を付与して並べ替え）----
   const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
@@ -459,21 +470,28 @@ function fillSongGrid() {
 
   // ---- 描画 ----
   container.innerHTML = `
-    <!-- 上部メトリクス（スマホで2列→sm以上で3列） -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-      <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
-        <div class="text-xs text-gray-500">総合レート（上位40合計）</div>
-        <div class="text-xl font-bold text-purple-700">${totalRate}</div>
-      </div>
-      <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
-        <div class="text-xs text-gray-500">上位40平均レート</div>
-        <div class="text-xl font-bold text-purple-700">${avgRate}</div>
-      </div>
-      <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center col-span-2 sm:col-span-1">
-        <div class="text-xs text-gray-500">登録スコア数</div>
-        <div class="text-xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
-      </div>
-    </div>
+    <!-- 上部メトリクス（スマホ2列／SM以上4列） -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+    <div class="text-xs text-gray-500">Rating</div>
+    <div class="text-xl font-bold text-purple-700">${totalRate}</div>
+  </div>
+
+  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+    <div class="text-xs text-gray-500">B40平均レート</div>
+    <div class="text-xl font-bold text-purple-700">${avgRate}</div>
+  </div>
+
+  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+    <div class="text-xs text-gray-500">B40下限</div>
+    <div class="text-xl font-bold text-purple-700">${b40Lower}</div>
+  </div>
+
+  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+    <div class="text-xs text-gray-500">登録スコア数</div>
+    <div class="text-xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
+  </div>
+</div>
 
     <!-- スコア一覧 -->
     <div id="scoreList" class="space-y-2">
