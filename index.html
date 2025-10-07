@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音楽ゲームスコア管理システム</title>
+    <title>CubicDB</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -999,7 +999,7 @@ window.updateCombinedLine = (prevScore, prevRate, diffScore, diffRate) => {
   const absRate   = Math.abs(diffRate).toFixed(3);
 
   el.innerHTML =
-    `登録済スコア: ${Number(prevScore).toLocaleString()} ` +
+    `登録済みスコア: ${Number(prevScore).toLocaleString()} ` +
     `<span class="${scoreColor} font-semibold">${signScore} ${absScore}</span>` +
     ` (Rate ${Number(prevRate).toFixed(3)} ` +
     `<span class="${rateColor} font-semibold">${signRate} ${absRate}</span>)`;
@@ -1024,7 +1024,7 @@ window.updateDiffUI = (prev, level) => {
   if (input.value !== value) input.value = value;
 
   if (!prev) {
-    el.textContent = '登録済スコア: なし';
+    el.textContent = '登録済みスコア: なし';
     return;
   }
 
