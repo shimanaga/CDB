@@ -26,6 +26,27 @@ async function resolvePrimaryUid(auth, db) {
   window.primaryUid = cachedPrimaryUid;
   return cachedPrimaryUid;
 }
+        // --- 管理者判定（aliases による継承対応）---
+async function resolveEffectiveAdmin(auth, db) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return false;
+
+  // 1) 自分自身の isAdmin
+  const me = await getDoc(doc(db, "users", uid));
+  if (me.exists() && me.data()?.isAdmin === true) return true;
+
+  // 2) エイリアスで admin 継承（aliases/{uid}.admin == true かつ active == true）
+  const a = await getDoc(doc(db, "aliases", uid));
+  if (a.exists() && a.data()?.active === true && a.data()?.admin === true) return true;
+
+  // （任意）UI表示も主UIDの isAdmin に揃えたい場合
+  const p = a.exists() ? a.data()?.primaryUid : undefined;
+  if (p) {
+    const primary = await getDoc(doc(db, "users", p));
+    if (primary.exists() && primary.data()?.isAdmin === true) return true;
+  }
+  return false;
+}
 
 function resetPrimaryUidCache() {
   cachedPrimaryUid = null;
@@ -73,10 +94,9 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
 
-    // ★ 管理者フラグ（従来どおり user.uid を参照でOK）
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    isAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
-    document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
+    // ★ エイリアス継承込みで管理者判定
+isAdmin = await resolveEffectiveAdmin(auth, db);
+document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
 
     window.currentUser = user; // グローバル公開
 
