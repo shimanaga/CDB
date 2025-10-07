@@ -121,7 +121,7 @@ onIdTokenChanged(auth, async (user) => {
         // ユーザーIDコピー
         window.copyUserId = (uid) => {
   navigator.clipboard.writeText(uid).then(() => {
-    alert('ユーザーIDをコピーしました。サポート/管理者にお知らせください。');
+    showToast('スコアの保存に失敗しました', 'success');
   });
 };
 
@@ -234,7 +234,7 @@ async function saveScore(songId, difficulty, score, level) {
             try {
                 await deleteDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId));
                 delete userScores[scoreId];
-                showToast('楽曲を保存しました', 'success')
+                showToast('スコアを削除しました', 'success')
                 renderCurrentPage();
             } catch (error) {
                 console.error("スコア削除エラー:", error);
@@ -325,7 +325,7 @@ async function saveScore(songId, difficulty, score, level) {
                 
 if (!isAdmin) {
   content.innerHTML = `
-    <div class="bg-white bg-opacity-90 rounded-lg p-6 text-center text-red-600 font-semibold">
+    <div class="bg-white rounded-lg p-6 text-center text-red-600 font-semibold">
       403 Forbidden — 管理者のみアクセスできます
     </div>`;
   return;
@@ -358,8 +358,8 @@ function renderSongList(container) {
     <input
       type="text"
       id="searchInput"
-      placeholder="楽曲名・アーティスト名・タグで検索"
-      class="w-full pl-12 pr-4 py-3 rounded-lg bg-white bg-opacity-90 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      placeholder="楽曲名・作曲者名で検索"
+      class="w-full pl-12 pr-4 py-3 rounded-lg bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
       value="${escapeHtml(rawTerm)}"
       oninput="handleSongSearch(this.value)"
       autocomplete="off"
@@ -395,7 +395,7 @@ function _filterSongs(rawTerm) {
 
 function _renderSongTiles(arr) {
   return arr.map(song => `
-    <div onclick="selectSong('${song.id}')" class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-opacity-100 transition transform hover:scale-105 shadow-lg">
+    <div onclick="selectSong('${song.id}')" class="bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-white transition transform hover:scale-105 shadow-lg">
       ${song.imageUrl ? `
         <div class="w-full h-48 bg-gray-200 overflow-hidden">
           <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
@@ -436,14 +436,14 @@ function fillSongGrid() {
         function renderScoreEntry(container) {
             const song = selectedSong;
             container.innerHTML = `
-                <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
-                    <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-700 hover:text-purple-900 font-semibold">
+                <div class="bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
+                    <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-900 hover:text-purple-800 font-semibold">
                       ← 戻る
                     </button>
                     
                     ${song.imageUrl ? `
                         <div class="mb-4 rounded-lg overflow-hidden">
-                            <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-64 object-cover" />
+                            <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-80 object-cover" />
                         </div>
                     ` : ''}
                     
@@ -467,10 +467,10 @@ function fillSongGrid() {
                         <div id="scoreInputs" class="hidden space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">スコア</label>
-                                <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                                <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                             </div>
 
-                            <button onclick="submitScore()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition">
+                            <button onclick="submitScore()" class="w-full bg-purple-800 hover:bg-purple-900 text-white font-bold py-3 rounded-lg transition">
                                 スコアを保存
                             </button>
                         </div>
@@ -521,22 +521,24 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
   container.innerHTML = `
     <!-- 上部メトリクス（スマホ2列／SM以上4列） -->
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">Rating</div>
-    <div class="text-xl font-bold text-purple-700">${totalRate}</div>
+    <div>
+  <span id="ratingValue" class="text-xl font-bold text-purple-700">${totalRate}</span>
+</div>
   </div>
 
-  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">B40平均レート</div>
     <div class="text-xl font-bold text-purple-700">${avgRate}</div>
   </div>
 
-  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">B40下限</div>
     <div class="text-xl font-bold text-purple-700">${b40Lower}</div>
   </div>
 
-  <div class="bg-white bg-opacity-90 rounded-lg p-3 shadow-sm text-center">
+  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">登録スコア数</div>
     <div class="text-xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
   </div>
@@ -549,13 +551,13 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
           ${scoresWithSongInfo.length > 40 && idx === 40 ? `
             <div class="relative my-3">
               <div class="border-t border-gray-300"></div>
-              <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-white bg-opacity-90 px-3 text-xs text-gray-500">
+              <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-400 bg-opacity-90 px-3 text-xs text-gray-500">
                 BEST 40
               </div>
             </div>
           ` : ''}
 
-          <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-white bg-opacity-90 rounded-lg shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gradient-to-br from-white via-white to-slate-200 rounded-lg shadow-sm">
             <!-- 左: サムネ -->
             ${
               score.song?.imageUrl ? `
@@ -599,6 +601,7 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
       }
     </div>
   `;
+                updateRatingColor(parseFloat(totalRate));
 }
 
         // 管理画面
@@ -952,9 +955,38 @@ window.submitScore = () => {
     setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, ms);
   };
 })();
+// Rating値に応じて文字色を変える関数
+function updateRatingColor(value) {
+  const el = document.getElementById("ratingValue");
+  if (!el) return;
+
+  el.style = "";
+
+  if (value < 5.0) el.style.color = "#333333";
+  else if (value < 10.0) el.style.color = "#22d3e3";
+  else if (value < 12.0) el.style.color = "#08c969";
+  else if (value < 14.0) el.style.color = "#deda00";
+  else if (value < 16.0) el.style.color = "#e3970b";
+  else if (value < 18.0) el.style.color = "#d91c1c";
+  else if (value < 19.0) el.style.color = "#a319d1";
+  else {
+    el.style.background = "linear-gradient(130deg, magenta, red)";
+    el.style.webkitBackgroundClip = "text";
+    el.style.webkitTextFillColor = "transparent";
+    el.style.animation = "rainbow 6s linear infinite";
+  }
+}
+
+const rainbowStyle = document.createElement("style");
+rainbowStyle.textContent = `
+@keyframes rainbow {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}`;
+document.head.appendChild(rainbowStyle);
     </script>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+<body class="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black">
     <!-- ローディング画面 -->
     <div id="loading" class="min-h-screen flex items-center justify-center">
         <div class="text-white text-2xl">ログイン中...</div>
@@ -977,12 +1009,8 @@ window.submitScore = () => {
   <!-- Top rim -->
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M4 7.5l8 4 8-4" />
-  <!-- Data layers (simple, legible at small sizes) -->
-  <path stroke-linecap="round" stroke-width="2" d="M9 12h6" />
-  <path stroke-linecap="round" stroke-width="2" d="M9 14.5h6" />
-  <path stroke-linecap="round" stroke-width="2" d="M9 17h6" />
 </svg>
-                            TAKUMI³ Player DB
+                            TAKUMI³ Play³r DB
                         </h1>
                         <div id="userIdDisplay" class="mt-2"></div>
                     </div>
@@ -990,10 +1018,10 @@ window.submitScore = () => {
                         <button id="scoreTab" onclick="switchPage('score')" class="tab-btn px-4 py-2 rounded-lg font-semibold transition bg-white text-purple-900">
                             スコア登録
                         </button>
-                        <button id="statsTab" onclick="switchPage('stats')" class="tab-btn px-4 py-2 rounded-lg font-semibold transition bg-white bg-opacity-20 text-white hover:bg-opacity-30">
+                        <button id="statsTab" onclick="switchPage('stats')" class="tab-btn px-4 py-2 rounded-lg font-semibold transition bg-white bg-opacity-20 text-white">
                             統計
                         </button>
-                        <button id="adminTab" onclick="switchPage('admin')" class="tab-btn hidden px-4 py-2 rounded-lg font-semibold transition bg-white bg-opacity-20 text-white hover:bg-opacity-30">
+                        <button id="adminTab" onclick="switchPage('admin')" class="tab-btn hidden px-4 py-2 rounded-lg font-semibold transition bg-white bg-opacity-20 text-white">
                             管理
                         </button>
                     </div>
