@@ -153,7 +153,7 @@ onIdTokenChanged(auth, async (user) => {
         // ユーザーIDコピー
         window.copyUserId = (uid) => {
   navigator.clipboard.writeText(uid).then(() => {
-    showToast('スコアの保存に失敗しました', 'success');
+    showToast('コピーしました', 'success');
   });
 };
 
