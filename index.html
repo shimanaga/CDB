@@ -10,51 +10,45 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, getIdTokenResult, onIdTokenChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-let cachedPrimaryUid = null;
+        let cachedPrimaryUid = null;
 
-async function resolvePrimaryUid(auth, db) {
-  const u = auth.currentUser;
-  if (!u) throw new Error("not signed in");
+        async function resolvePrimaryUid(auth, db) {
+            const u = auth.currentUser;
+            if (!u) throw new Error("not signed in");
 
-  if (cachedPrimaryUid) return cachedPrimaryUid;
+            if (cachedPrimaryUid) return cachedPrimaryUid;
 
-  const snap = await getDoc(doc(db, "aliases", u.uid));
-  cachedPrimaryUid =
-    (snap.exists() && snap.data()?.active && snap.data()?.primaryUid) || u.uid;
+            const snap = await getDoc(doc(db, "aliases", u.uid));
+            cachedPrimaryUid =
+                (snap.exists() && snap.data()?.active && snap.data()?.primaryUid) || u.uid;
 
-  // デバッグ用にも見えるように
-  window.primaryUid = cachedPrimaryUid;
-  return cachedPrimaryUid;
-}
-        // --- 管理者判定（aliases による継承対応）---
-async function resolveEffectiveAdmin(auth, db) {
-  const uid = auth.currentUser?.uid;
-  if (!uid) return false;
+                 window.primaryUid = cachedPrimaryUid;
+                 return cachedPrimaryUid;
+        }
 
-  // 1) 自分自身の isAdmin
-  const me = await getDoc(doc(db, "users", uid));
-  if (me.exists() && me.data()?.isAdmin === true) return true;
+        async function resolveEffectiveAdmin(auth, db) {
+            const uid = auth.currentUser?.uid;
+            if (!uid) return false;
 
-  // 2) エイリアスで admin 継承（aliases/{uid}.admin == true かつ active == true）
-  const a = await getDoc(doc(db, "aliases", uid));
-  if (a.exists() && a.data()?.active === true && a.data()?.admin === true) return true;
+            const me = await getDoc(doc(db, "users", uid));
+            if (me.exists() && me.data()?.isAdmin === true) return true;
 
-  // （任意）UI表示も主UIDの isAdmin に揃えたい場合
-  const p = a.exists() ? a.data()?.primaryUid : undefined;
-  if (p) {
-    const primary = await getDoc(doc(db, "users", p));
-    if (primary.exists() && primary.data()?.isAdmin === true) return true;
-  }
-  return false;
-}
+            const a = await getDoc(doc(db, "aliases", uid));
+            if (a.exists() && a.data()?.active === true && a.data()?.admin === true) return true;
 
-function resetPrimaryUidCache() {
-  cachedPrimaryUid = null;
-  delete window.primaryUid;
-}
+            const p = a.exists() ? a.data()?.primaryUid : undefined;
+            if (p) {
+                const primary = await getDoc(doc(db, "users", p));
+                if (primary.exists() && primary.data()?.isAdmin === true) return true;
+            }
+            return false;
+        }
 
+        function resetPrimaryUidCache() {
+            cachedPrimaryUid = null;
+            delete window.primaryUid;
+        }
 
-        // Firebase設定（あなたの設定値に置き換えてください）
         const firebaseConfig = {
             apiKey: "AIzaSyBrlOj1D_Tkk16l9_T_gHcGgGvgjXrkg2k",
             authDomain: "tcdb-de19d.firebaseapp.com",
@@ -74,59 +68,49 @@ function resetPrimaryUidCache() {
         let selectedSong = null;
         let editingSong = null;
 
-        // Firebase初期化
         async function initFirebase() {
             try {
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // グローバルに公開（デバッグ用）
                 window.auth = auth;
                 window.db = db;
 
-                // 匿名認証
                 await signInAnonymously(auth);
 
-                // 認証状態の監視
-                // 認証状態の監視（置き換え）
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUser = user;
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUser = user;
 
-    // ★ エイリアス継承込みで管理者判定
-isAdmin = await resolveEffectiveAdmin(auth, db);
-document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
+                        isAdmin = await resolveEffectiveAdmin(auth, db);
+                        document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
 
-    window.currentUser = user; // グローバル公開
+                        window.currentUser = user;
 
-    // ★ 主UIDを解決（ID2→ID1）
-    const primaryUid = await resolvePrimaryUid(auth, db);
+                        const primaryUid = await resolvePrimaryUid(auth, db);
 
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
+                        document.getElementById('loading').classList.add('hidden');
+                        document.getElementById('app').classList.remove('hidden');
 
-    // ★ データは主UIDから読み込む
-    await loadUserData(primaryUid);
-    await loadSongs();
-    renderCurrentPage();
-  } else {
-    // 未ログイン時など
-    resetPrimaryUidCache();
-  }
-});
+                        await loadUserData(primaryUid);
+                        await loadSongs();
+                        renderCurrentPage();
+                    } else {
+                        resetPrimaryUidCache();
+                    }
+                });
 
-// Firestore / Auth の状態変化に応じて「継承込み」で再評価
-onIdTokenChanged(auth, async (user) => {
-  if (!user) return;
+                onIdTokenChanged(auth, async (user) => {
+                    if (!user) return;
 
-  const newIsAdmin = await resolveEffectiveAdmin(auth, db); // ★ ここがポイント
-  if (newIsAdmin !== isAdmin) {
-    isAdmin = newIsAdmin;
-    document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
-    if (!isAdmin && currentPage === 'admin') switchPage('score');
-  }
-});
+                    const newIsAdmin = await resolveEffectiveAdmin(auth, db);
+                    if (newIsAdmin !== isAdmin) {
+                        isAdmin = newIsAdmin;
+                        document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
+                        if (!isAdmin && currentPage === 'admin') switchPage('score');
+                    }
+                });
 
             } catch (error) {
                 console.error("Firebase初期化エラー:", error);
@@ -142,41 +126,36 @@ onIdTokenChanged(auth, async (user) => {
             }
         }
 
-        // ユーザーID表示
         function displayUserId(uid, username) {
-    const display = document.getElementById('userIdDisplay');
-    if (display) {
-        if (username) {
-            // ユーザー名が登録されている場合
-            display.innerHTML = `
-                <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
-                    <span class="text-yellow-300 text-xs">プレイヤーID:</span>
-                    <span class="text-yellow-100 font-semibold text-sm ml-2">${escapeHtml(username)}</span>
-                </div>
-            `;
-        } else {
-            // ユーザー名が未登録の場合（従来通り）
-            display.innerHTML = `
-                <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
-                    <span class="text-yellow-300 text-xs">プレイヤーID:</span>
-                    <span class="text-yellow-100 font-mono text-sm ml-2">非表示</span>
-                    <button onclick="copyUserId('${uid}')" class="ml-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs px-2 py-1 rounded">
-                        コピー
-                    </button>
-                </div>
-            `;
+            const display = document.getElementById('userIdDisplay');
+            if (display) {
+                if (username) {
+                    display.innerHTML = `
+                        <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
+                            <span class="text-yellow-300 text-xs">プレイヤーID:</span>
+                            <span class="text-yellow-100 font-semibold text-sm ml-2">${escapeHtml(username)}</span>
+                        </div>
+                    `;
+                } else {
+                    display.innerHTML = `
+                        <div class="bg-yellow-500 bg-opacity-20 px-3 py-2 rounded-lg">
+                            <span class="text-yellow-300 text-xs">プレイヤーID:</span>
+                            <span class="text-yellow-100 font-mono text-sm ml-2">非表示</span>
+                            <button onclick="copyUserId('${uid}')" class="ml-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs px-2 py-1 rounded">
+                                コピー
+                            </button>
+                        </div>
+                    `;
+                }
+            }
         }
-    }
-}
 
-        // ユーザーIDコピー
         window.copyUserId = (uid) => {
-  navigator.clipboard.writeText(uid).then(() => {
-    showToast('コピーしました', 'success');
-  });
-};
+            navigator.clipboard.writeText(uid).then(() => {
+                showToast('コピーしました', 'success');
+            });
+        };
 
-        // 楽曲データ読み込み
         async function loadSongs() {
             try {
                 const songsCol = collection(db, 'songs');
@@ -192,106 +171,96 @@ onIdTokenChanged(auth, async (user) => {
             }
         }
 
-        // ユーザーデータ読み込み（サブコレクション構造に変更）
         async function loadUserData(userId) {
-    try {
-        // ユーザー名を取得
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        let username = null;
-        if (userDoc.exists()) {
-            username = userDoc.data().username || null;
-        }
-        
-        // ユーザーIDとユーザー名を表示（username優先）
-        displayUserId(userId, username);
-        
-        // サブコレクションから直接スコアを取得（高速）
-        const scoresCol = collection(db, 'users', userId, 'scores');
-        const scoreSnapshot = await getDocs(scoresCol);
-        userScores = {};
-        scoreSnapshot.docs.forEach(doc => {
-            userScores[doc.id] = doc.data();
-        });
-        window.userScores = userScores;
-        console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
-    } catch (error) {
-        console.error("ユーザーデータ読み込みエラー:", error);
-    }
-}
+            try {
+                const userDoc = await getDoc(doc(db, 'users', userId));
+                let username = null;
+                if (userDoc.exists()) {
+                    username = userDoc.data().username || null;
+                }
 
-        // 単曲レート計算
+                displayUserId(userId, username);
+
+                const scoresCol = collection(db, 'users', userId, 'scores');
+                const scoreSnapshot = await getDocs(scoresCol);
+                userScores = {};
+                scoreSnapshot.docs.forEach(doc => {
+                    userScores[doc.id] = doc.data();
+                });
+                window.userScores = userScores;
+                console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
+            } catch (error) {
+                console.error("ユーザーデータ読み込みエラー:", error);
+            }
+        }
+
         function calculateRate(score, level) {
             const baseRate = level;
             const scoreRate = score >= 999000 ? (level + (2 + (score - 999000) / 10000)) / 34 :
-                             score >= 995000 ? (level + (1.5 + (score - 995000) / 8000)) / 34 :
-                             score >= 990000 ? (level + (1 + (score - 990000) / 10000)) / 34 :
-                             score >= 970000 ? (level + (score - 970000) / 20000) / 34 :
-                             score >= 800000 ? (level * (score - 800000) / 170000) / 34 : 0;
+                            score >= 995000 ? (level + (1.5 + (score - 995000) / 8000)) / 34 :
+                            score >= 990000 ? (level + (1 + (score - 990000) / 10000)) / 34 :
+                            score >= 970000 ? (level + (score - 970000) / 20000) / 34 :
+                            score >= 800000 ? (level * (score - 800000) / 170000) / 34 : 0;
             return (scoreRate).toFixed(3);
         }
 
-// スコア保存（サブコレ構造）— 主UIDに保存（置き換え）
-async function saveScore(songId, difficulty, score, level) {
-  const rate = calculateRate(parseInt(score), parseFloat(level));
-  const scoreId = `${songId}_${difficulty}`;
+        async function saveScore(songId, difficulty, score, level) {
+            const rate = calculateRate(parseInt(score), parseFloat(level));
+            const scoreId = `${songId}_${difficulty}`;
 
-  try {
-    const uid = window.primaryUid || await resolvePrimaryUid(auth, db); // ★主UID
+            try {
+                const uid = window.primaryUid || await resolvePrimaryUid(auth, db);
 
-    await setDoc(doc(db, 'users', uid, 'scores', scoreId), {
-      songId,
-      difficulty,
-      score: parseInt(score),
-      level: parseFloat(level),
-      rate: parseFloat(rate),
-      timestamp: new Date().toISOString()
-    });
+                await setDoc(doc(db, 'users', uid, 'scores', scoreId), {
+                    songId,
+                    difficulty,
+                    score: parseInt(score),
+                    level: parseFloat(level),
+                    rate: parseFloat(rate),
+                    timestamp: new Date().toISOString()
+                });
 
-    // ローカル反映
-    userScores[scoreId] = { songId, difficulty, score: parseInt(score), level: parseFloat(level), rate: parseFloat(rate) };
+                userScores[scoreId] = { songId, difficulty, score: parseInt(score), level: parseFloat(level), rate: parseFloat(rate) };
 
-    showToast('スコアを保存しました', 'success');
+                showToast('スコアを保存しました', 'success');
 
-    // 入力状態のリセット等（元の挙動を維持）
-    window.selectedDifficulty = null;
-    window.selectedLevel = null;
-    const input = document.getElementById('scoreInput');
-    if (input) input.value = '';
+                window.selectedDifficulty = null;
+                window.selectedLevel = null;
+                const input = document.getElementById('scoreInput');
+                if (input) input.value = '';
 
-    DIFFICULTIES.forEach(d => {
-      const btn = document.getElementById(`diff_${d}`);
-      if (btn) { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
-    });
-    const inputs = document.getElementById('scoreInputs');
-    if (inputs) inputs.classList.add('hidden');
+                DIFFICULTIES.forEach(d => {
+                    const btn = document.getElementById(`diff_${d}`);
+                    if (btn) { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
+                });
+                const inputs = document.getElementById('scoreInputs');
+                if (inputs) inputs.classList.add('hidden');
 
-    if (currentPage === 'score' && selectedSong && selectedSong.id === songId) {
-      const content = document.getElementById('content');
-      if (typeof renderScoreEntry === 'function' && content) renderScoreEntry(content);
-    }
-  } catch (error) {
-    console.error('スコア保存エラー:', error);
-    showToast('スコアの保存に失敗しました', 'error');
-  }
-}
+                if (currentPage === 'score' && selectedSong && selectedSong.id === songId) {
+                    const content = document.getElementById('content');
+                    if (typeof renderScoreEntry === 'function' && content) renderScoreEntry(content);
+                }
+            } catch (error) {
+                console.error('スコア保存エラー:', error);
+                showToast('スコアの保存に失敗しました', 'error');
+            }
+        }
 
-        // スコア削除（置き換え）
-async function deleteScore(scoreId) {
-  if (!confirm('このスコアを削除しますか？')) return;
+        async function deleteScore(scoreId) {
+            if (!confirm('このスコアを削除しますか？')) return;
 
-  try {
-    const uid = window.primaryUid || await resolvePrimaryUid(auth, db); // ★主UID
-    await deleteDoc(doc(db, 'users', uid, 'scores', scoreId));
-    delete userScores[scoreId];
-    showToast('スコアを削除しました', 'success')
-    renderCurrentPage();
-  } catch (error) {
-    console.error("スコア削除エラー:", error);
-    alert('スコアの削除に失敗しました');
-  }
-}
+            try {
+                const uid = window.primaryUid || await resolvePrimaryUid(auth, db);
+                await deleteDoc(doc(db, 'users', uid, 'scores', scoreId));
+                delete userScores[scoreId];
+                showToast('スコアを削除しました', 'success')
+                renderCurrentPage();
+            } catch (error) {
+                console.error("スコア削除エラー:", error);
+                alert('スコアの削除に失敗しました');
+            }
+        }
 
-        // 楽曲保存（画像URL方式に変更）
         async function saveSong(songData) {
             const songId = songData.id || `song_${Date.now()}`;
             const imageUrl = document.getElementById('imageUrlInput')?.value || songData.imageUrl || '';
@@ -319,7 +288,6 @@ async function deleteScore(scoreId) {
             }
         }
 
-        // 楽曲削除（シンプル化）
         async function deleteSong(songId) {
             if (!confirm('本当に削除しますか？')) return;
 
@@ -333,35 +301,32 @@ async function deleteScore(scoreId) {
             }
         }
 
-        // ページ切り替え
         function switchPage(page) {
-          currentPage = page;
-          selectedSong = null;
-          editingSong = null;
+            currentPage = page;
+            selectedSong = null;
+            editingSong = null;
 
-          document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.remove('bg-white', 'bg-opacity-20', 'text-white', 'text-purple-900');
-            btn.classList.add('bg-white', 'bg-opacity-20', 'text-white');
-          });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'bg-opacity-20', 'text-white', 'text-purple-900');
+                btn.classList.add('bg-white', 'bg-opacity-20', 'text-white');
+            });
 
-  const active = document.getElementById(`${page}Tab`);
-  if (active) {
-    active.classList.remove('bg-opacity-20', 'text-white');
-    active.classList.add('bg-white', 'text-purple-900');
-  }
-  renderCurrentPage();
-}
+            const active = document.getElementById(`${page}Tab`);
+            if (active) {
+                active.classList.remove('bg-opacity-20', 'text-white');
+                active.classList.add('bg-white', 'text-purple-900');
+            }
+            renderCurrentPage();
+        }
 
-        // 楽曲追加開始
         window.startAddSong = () => {
             editingSong = {};
             renderCurrentPage();
         };
 
-        // ページレンダリング
         function renderCurrentPage() {
             const content = document.getElementById('content');
-            
+
             if (currentPage === 'score') {
                 if (selectedSong) {
                     renderScoreEntry(content);
@@ -371,222 +336,187 @@ async function deleteScore(scoreId) {
             } else if (currentPage === 'stats') {
                 renderStatistics(content);
             } else if (currentPage === 'admin') {
-                
-if (!isAdmin) {
-  content.innerHTML = `
-    <div class="bg-white rounded-lg p-6 text-center text-red-600 font-semibold">
-      403 Forbidden — 管理者のみアクセスできます
-    </div>`;
-  return;
-}
-renderAdmin(content);
+
+                if (!isAdmin) {
+                    content.innerHTML = `
+                        <div class="bg-white rounded-lg p-6 text-center text-red-600 font-semibold">
+                            403 Forbidden — 管理者のみアクセスできます
+                        </div>`;
+                    return;
+                }
+                renderAdmin(content);
             }
         }
 
-        // 楽曲リスト表示
-        // --- replace START: renderSongList ---
-function renderSongList(container) {
-  // 表示用（小文字化しない）
-  const domTerm = document.getElementById('searchInput')?.value || '';
-  const rawTerm = (window.songSearchTerm ?? domTerm) || '';
+        function renderSongList(container) {
 
-  container.innerHTML = `
-    <!-- 検索欄（固定。以降は再描画しない） -->
-    <div class="mb-6">
-  <div class="relative">
-    <!-- 🔍 左アイコン -->
-    <svg
-      aria-hidden="true"
-      class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 z-10"
-      viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/>
-    </svg>
+            const domTerm = document.getElementById('searchInput')?.value || '';
+            const rawTerm = (window.songSearchTerm ?? domTerm) || '';
 
-    <!-- 入力欄（左パディングはアイコン幅＋余白分） -->
-    <input
-      type="text"
-      id="searchInput"
-      placeholder="楽曲名・作曲者名で検索"
-      class="w-full pl-12 pr-4 py-3 rounded-lg bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-      value="${escapeHtml(rawTerm)}"
-      oninput="handleSongSearch(this.value)"
-      autocomplete="off"
-      spellcheck="false"
-      aria-label="楽曲を検索"
-    />
-  </div>
-</div>
+            container.innerHTML = `
+                <div class="mb-6">
+                    <div class="relative">
+                        <svg aria-hidden="true" class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 z-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/>
+                        </svg>
 
-    <!-- 楽曲カードの挿入先（ここだけ動的に入れ替える） -->
-    <div id="songGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-  `;
+                        <input
+                            type="text"
+                            id="searchInput"
+                            placeholder="楽曲名・作曲者名で検索"
+                            class="w-full pl-12 pr-4 py-3 rounded-lg bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            value="${escapeHtml(rawTerm)}"
+                            oninput="handleSongSearch(this.value)"
+                            autocomplete="off"
+                            spellcheck="false"
+                            aria-label="楽曲を検索"
+                        />
+                    </div>
+                </div>
 
-  // 初回描画（検索欄は再描画しない）
-  fillSongGrid();
-}
-// --- replace END: renderSongList ---
+                <div id="songGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            `;
 
-        // --- add START: song search helpers ---
-// 正規化（大小＆全半角の違いを吸収）
-const _norm = s => (s || '').toString().toLowerCase().normalize('NFKC');
+            fillSongGrid();
+        }
 
-function _filterSongs(rawTerm) {
-  const q = _norm(rawTerm);
-  return songs.filter(song => {
-    const t = _norm(song.title);
-    const a = _norm(song.artist);
-    const tagsArr = Array.isArray(song.tags) ? song.tags : (song.tags ? [song.tags] : []);
-    const tagHit = tagsArr.some(tag => _norm(tag).includes(q));
-    return t.includes(q) || a.includes(q) || tagHit;
-  });
-}
+        const _norm = s => (s || '').toString().toLowerCase().normalize('NFKC');
 
-function _renderSongTiles(arr) {
-  return arr.map(song => `
-    <div onclick="selectSong('${song.id}')" class="bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-white transition transform hover:scale-105 shadow-lg">
-      ${song.imageUrl ? `
-        <div class="w-full h-48 bg-gray-200 overflow-hidden">
-          <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
-        </div>
-      ` : `
-        <div class="w-full h-48 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
-          <svg class="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-          </svg>
-        </div>
-      `}
-      <div class="p-4">
-        <h3 class="font-bold text-lg text-gray-800 mb-1 truncate">${escapeHtml(song.title)}</h3>
-        <p class="text-sm text-gray-600 mb-3 truncate">${escapeHtml(song.artist)}</p>
-        <div class="flex flex-wrap gap-1">
-          ${DIFFICULTIES.map((diff, idx) =>
-            song.difficulties?.[diff]
-              ? `<span class="${DIFFICULTY_COLORS[idx]} text-white text-xs px-2 py-1 rounded font-semibold">${diff}</span>`
-              : ''
-          ).join('')}
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
+        function _filterSongs(rawTerm) {
+            const q = _norm(rawTerm);
+            return songs.filter(song => {
+                const t = _norm(song.title);
+                const a = _norm(song.artist);
+                const tagsArr = Array.isArray(song.tags) ? song.tags : (song.tags ? [song.tags] : []);
+                const tagHit = tagsArr.some(tag => _norm(tag).includes(q));
+                return t.includes(q) || a.includes(q) || tagHit;
+            });
+        }
 
-function fillSongGrid() {
-  const grid = document.getElementById('songGrid');
-  if (!grid) return;
-  const domTerm = document.getElementById('searchInput')?.value || '';
-  const rawTerm = (window.songSearchTerm ?? domTerm) || '';
-  const filtered = _filterSongs(rawTerm);
-  grid.innerHTML = _renderSongTiles(filtered);
-}
-// --- add END: song search helpers ---
-        
-        // スコア入力画面（置き換え）
-function renderScoreEntry(container) {
-  const song = selectedSong;
+        function _renderSongTiles(arr) {
+            return arr.map(song => `
+                <div onclick="selectSong('${song.id}')" class="bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm rounded-lg overflow-hidden cursor-pointer hover:bg-white transition transform hover:scale-105 shadow-lg">
+                    ${song.imageUrl ? `
+                        <div class="w-full h-48 bg-gray-200 overflow-hidden">
+                            <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-full object-cover" />
+                        </div>
+                    ` : `
+                        <div class="w-full h-48 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+                            <svg class="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                            </svg>
+                        </div>
+                    `}
+                    <div class="p-4">
+                        <h3 class="font-bold text-lg text-gray-800 mb-1 truncate">${escapeHtml(song.title)}</h3>
+                            <p class="text-sm text-gray-600 mb-3 truncate">${escapeHtml(song.artist)}</p>
+                                <div class="flex flex-wrap gap-1">
+                                    ${DIFFICULTIES.map((diff, idx) =>
+                                        song.difficulties?.[diff]
+                                        ? `<span class="${DIFFICULTY_COLORS[idx]} text-white text-xs px-2 py-1 rounded font-semibold">${diff}</span>`
+                                        : ''
+                                    ).join('')}
+                                </div>
+                    </div>
+                </div>
+            `).join('');
+        }
 
-  // この曲の登録済みスコア（難易度ごと）
-  const registeredChips = DIFFICULTIES.map((diff, idx) => {
-    const s = userScores[`${song.id}_${diff}`];
-    if (!s) return '';
-    return `
-      <div class="flex items-center gap-2 px-2 py-1 rounded bg-white bg-opacity-70">
-        <span class="${DIFFICULTY_COLORS[idx]} text-white text-[10px] px-2 py-0.5 rounded font-bold">${diff}</span>
-        <span class="font-mono text-sm">${Number(s.score).toLocaleString()}</span>
-        <span class="text-xs text-gray-500">Rate ${Number(s.rate).toFixed(3)}</span>
-      </div>
-    `;
-  }).filter(Boolean).join('');
+        function fillSongGrid() {
+            const grid = document.getElementById('songGrid');
+            if (!grid) return;
+            const domTerm = document.getElementById('searchInput')?.value || '';
+            const rawTerm = (window.songSearchTerm ?? domTerm) || '';
+            const filtered = _filterSongs(rawTerm);
+            grid.innerHTML = _renderSongTiles(filtered);
+        }
 
-  container.innerHTML = `
-    <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
-      <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-700 hover:text-purple-900 font-semibold">
-        ← 戻る
-      </button>
+        function renderScoreEntry(container) {
+            const song = selectedSong;
+            const registeredChips = DIFFICULTIES.map((diff, idx) => {
+                const s = userScores[`${song.id}_${diff}`];
+                if (!s) return '';
+                return `
+                    <div class="flex items-center gap-2 px-2 py-1 rounded bg-white bg-opacity-70">
+                        <span class="${DIFFICULTY_COLORS[idx]} text-white text-[10px] px-2 py-0.5 rounded font-bold">${diff}</span>
+                        <span class="font-mono text-sm">${Number(s.score).toLocaleString()}</span>
+                        <span class="text-xs text-gray-500">Rate ${Number(s.rate).toFixed(3)}</span>
+                    </div>
+                `;
+            }).filter(Boolean).join('');
 
-      ${song.imageUrl ? `
-        <div class="mb-4 rounded-lg overflow-hidden">
-          <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-64 object-cover" />
-        </div>` : ''}
+            container.innerHTML = `
+                <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
+                    <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-700 hover:text-purple-900 font-semibold">
+                        ← 戻る
+                    </button>
 
-      <h2 class="text-2xl font-bold text-gray-800 mb-2">${escapeHtml(song.title)}</h2>
-      <p class="text-gray-600 mb-6">${escapeHtml(song.artist)}</p>
+                    ${song.imageUrl ? `
+                        <div class="mb-4 rounded-lg overflow-hidden">
+                            <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-64 object-cover" />
+                        </div>` : ''}
 
-      <div class="space-y-4">
-        <!-- ★ 登録済みスコアを最上段に（上方向の余白は付けない） -->
-        <div id="registeredScores">
-          <div class="text-xs font-semibold text-gray-700">この曲の登録済みスコア</div>
-          ${registeredChips
-            ? `<div class="flex flex-wrap gap-2 mt-1">${registeredChips}</div>`
-            : `<div class="text-xs text-gray-500 mt-1">未登録</div>`}
-        </div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">${escapeHtml(song.title)}</h2>
+                        <p class="text-gray-600 mb-6">${escapeHtml(song.artist)}</p>
 
-        <!-- 難易度選択（従来どおり） -->
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">難易度を選択</label>
-          <div class="flex flex-wrap gap-2" id="difficultyButtons">
-            ${DIFFICULTIES
-              .map((diff, idx) =>
-                song.difficulties?.[diff]
-                  ? `<button onclick="selectDifficulty('${diff}', ${song.difficulties[diff]})"
-                       class="${DIFFICULTY_COLORS[idx]} bg-opacity-50 hover:bg-opacity-100 text-white px-4 py-2 rounded-lg font-semibold transition"
-                       id="diff_${diff}">
-                      ${diff} ${Number(song.difficulties[diff]).toFixed(1)}
-                     </button>`
-                  : ''
-              )
-              .join('')}
-          </div>
-        </div>
+                        <div class="space-y-4">
+                            <div id="registeredScores">
+                                <div class="text-xs font-semibold text-gray-700">この曲の登録済みスコア</div>
+                                ${registeredChips
+                                    ? `<div class="flex flex-wrap gap-2 mt-1">${registeredChips}</div>`
+                                    : `<div class="text-xs text-gray-500 mt-1">未登録</div>`}
+                            </div>
 
-        <!-- スコア入力 -->
-        <div id="scoreInputs" class="hidden space-y-3">
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2">スコア</label>
-            <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000"
-                   class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-            <!-- 1行でまとめて表示 -->
-            <div id="diffCombined" class="text-sm mt-2"></div>
-          </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">難易度を選択</label>
+                                <div class="flex flex-wrap gap-2" id="difficultyButtons">
+                                    ${DIFFICULTIES
+                                        .map((diff, idx) =>
+                                            song.difficulties?.[diff]
+                                                ? `<button onclick="selectDifficulty('${diff}', ${song.difficulties[diff]})" class="${DIFFICULTY_COLORS[idx]} bg-opacity-50 hover:bg-opacity-100 text-white px-4 py-2 rounded-lg font-semibold transition" id="diff_${diff}">
+                                                ${diff} ${Number(song.difficulties[diff]).toFixed(1)}
+                                                </button>`
+                                                : ''
+                                        )
+                                    .join('')}
+                                </div>
+                            </div>
 
-          <button onclick="submitScore()"
-                  class="w-full bg-purple-800 hover:bg-purple-900 text-white font-bold py-3 rounded-lg transition">
-            スコアを保存
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-}
+                            <div id="scoreInputs" class="hidden space-y-3">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">スコア</label>
+                                    <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                                    <div id="diffCombined" class="text-sm mt-2"></div>
+                                </div>
 
-        // 統計画面
+                                <button onclick="submitScore()" class="w-full bg-purple-800 hover:bg-purple-900 text-white font-bold py-3 rounded-lg transition">
+                                    スコアを保存
+                                </button>
+                            </div>
+                        </div>
+                </div>
+            `;
+        }
+
         function renderStatistics(container) {
-  // ---- メトリクス計算（上位40の合計・平均） ----
-  // ---- メトリクス計算（上位40合計・平均・B40下限） ----
 const ratesRaw = Object.values(userScores).map(s => Number(s.rate));
 const rates = ratesRaw.filter(n => !Number.isNaN(n));
-const sorted = [...rates].sort((a, b) => b - a);   // 高い順
+const sorted = [...rates].sort((a, b) => b - a);
 const topRates = sorted.slice(0, 40);
 const sumTop = topRates.reduce((a, b) => a + b, 0);
 
-// 総合レート（上位40の合計）
 const totalRate = topRates.length > 0 ? sumTop.toFixed(3) : '0.000';
 
-// 上位40平均レート：登録が40未満でも「残りは0」とみなして 40 で割る
 const avgRate = (sumTop / 40).toFixed(3);
 
-// B40下限（40番目のレート）。登録が39以下なら 0.000
 const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
 
-  // ---- スコア行データ（曲情報を付与して並べ替え）----
   const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
   const scoresWithSongInfo = Object.entries(userScores)
     .map(([id, sc]) => ({ ...sc, song: songMap[sc.songId], scoreId: id }))
     .sort((a, b) => b.rate - a.rate);
 
-  // ---- 描画 ----
   container.innerHTML = `
-    <!-- 上部メトリクス（スマホ2列／SM以上4列） -->
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
   <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">Rating</div>
@@ -611,16 +541,12 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
   </div>
 </div>
 
-    <!-- スコア一覧 -->
     <div id="scoreList" class="space-y-2">
       ${
         scoresWithSongInfo.map((score, idx) => `
           ${scoresWithSongInfo.length > 40 && idx === 40 ? `
             <div class="relative flex items-center justify-center my-6">
-        <!-- 文字を中央に配置し、その左右に線を引く -->
         <span class="text-2xl font-bold text-yellow-400 z-10">BEST40</span>
-        
-        <!-- 左右に伸びる線 -->
         <div class="absolute left-0 right-2/3 top-1/2 transform -translate-y-1/2 border-t-2 border-yellow-400 z-0"></div>
         <div class="absolute left-2/3 right-0 top-1/2 transform -translate-y-1/2 border-t-2 border-yellow-400 z-0"></div>
       </div>
@@ -628,7 +554,6 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
           ` : ''}
 
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gradient-to-br from-white via-white to-slate-200 rounded-lg shadow-sm">
-            <!-- 左: サムネ -->
             ${
               score.song?.imageUrl ? `
                 <img src="${score.song.imageUrl}"
@@ -644,7 +569,6 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
               `
             }
 
-            <!-- 中: タイトル等（truncate させるため min-w-0） -->
             <div class="flex-1 min-w-0">
               <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song?.title || '(不明な曲)')}</div>
               <div class="text-xs sm:text-sm text-gray-600 truncate">
@@ -652,7 +576,6 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
               </div>
             </div>
 
-            <!-- 右: 値と削除（モバイルでは下段に回る／sm以上は右端固定） -->
             <div class="flex items-center justify-between sm:justify-end gap-3 sm:ml-4 shrink-0 w-full sm:w-auto">
               <div class="text-right flex-1 sm:flex-none min-w-0">
                 <div class="font-bold text-base sm:text-lg text-purple-700 leading-tight">Rate: ${score.rate}</div>
@@ -674,7 +597,6 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
                 updateRatingColor(parseFloat(totalRate));
 }
 
-        // 管理画面
         function renderAdmin(container) {
             if (editingSong) {
                 renderSongEditor(container);
@@ -739,13 +661,11 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
             }
         }
 
-        // 楽曲編集画面
         function renderSongEditor(container) {
             const song = editingSong;
             container.innerHTML = `
                 <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6 max-w-3xl mx-auto">
                     <h3 class="text-xl font-bold text-gray-800 mb-4">${song.id ? '楽曲編集' : '楽曲追加'}</h3>
-                    
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">ジャケット画像</label>
@@ -817,15 +737,12 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
             `;
         }
 
-        // 画像プレビュー更新
-        // 画像プレビュー更新（置き換え）
         window.updateImagePreview = (url) => {
           const preview = document.getElementById('previewImage');
           if (!preview) return;
 
           if (!url) {
             if (preview.tagName === 'IMG') {
-              // フォールバックを増やさないよう、先に隣のフォールバックを除去
               const fallback = preview.nextElementSibling;
               if (fallback) fallback.remove();
 
@@ -857,14 +774,11 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
           }
         };
 
-    
-        // グローバル関数
         window.selectSong = (songId) => {
             selectedSong = songs.find(s => s.id === songId);
             renderCurrentPage();
         };
 
-// 難易度選択（置き換え）
 window.selectDifficulty = (diff, level) => {
   window.selectedDifficulty = diff;
   window.selectedLevel = Number(level);
@@ -872,7 +786,6 @@ window.selectDifficulty = (diff, level) => {
   const inputs = document.getElementById('scoreInputs');
   if (inputs) inputs.classList.remove('hidden');
 
-  // ボタンのハイライト
   DIFFICULTIES.forEach(d => {
     const btn = document.getElementById(`diff_${d}`);
     if (!btn) return;
@@ -880,30 +793,23 @@ window.selectDifficulty = (diff, level) => {
     else { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
   });
 
-  // 以前のスコア（この譜面・難易度）
   const prev = userScores[`${selectedSong.id}_${diff}`] || null;
   const diffEl = document.getElementById('diffCombined');
 
   if (prev) {
-    // 初期は差分 0 を灰色で
     updateCombinedLine(Number(prev.score)||0, Number(prev.rate)||0, 0, 0);
   } else {
-    diffEl.textContent = '登録済スコア: なし';
+    diffEl.textContent = '登録済みスコア: 未登録';
   }
-
-  // 入力と同時に差分更新（サニタイズ込み）
   const input = document.getElementById('scoreInput');
 if (input) {
   input.value = '';
-  // 入力のたびにクランプ＆差分更新
   input.oninput  = () => updateDiffUI(prev, window.selectedLevel);
-  // フォーカスを外した／change時も最終クランプ
   input.onblur   = () => updateDiffUI(prev, window.selectedLevel);
   input.onchange = () => updateDiffUI(prev, window.selectedLevel);
 }
 };
 
-// 入力と同時に差分を色分け表示（追加）
 window.updateDiffUI = (prev, level) => {
   const input  = document.getElementById('scoreInput');
   const scoreEl = document.getElementById('scoreDiff');
@@ -913,7 +819,6 @@ window.updateDiffUI = (prev, level) => {
   const raw = input.value;
   if (raw === '') { scoreEl.textContent = ''; rateEl.textContent = ''; return; }
 
-  // 以前のスコアが無いなら差分は出さない（要件どおり）
   if (!prev) { scoreEl.textContent = ''; rateEl.textContent = ''; return; }
 
   const n = Math.max(0, Math.min(1000000, parseInt(raw, 10) || 0));
@@ -922,7 +827,7 @@ window.updateDiffUI = (prev, level) => {
   const prevRate  = Number(prev.rate)  || 0;
 
   const diffScore = n - prevScore;
-  const newRate   = parseFloat(calculateRate(n, level)); // calculateRate は "0.000" 形式の文字列
+  const newRate   = parseFloat(calculateRate(n, level));
   const diffRate  = newRate - prevRate;
 
   const scoreColor = diffScore > 0 ? 'text-green-500' : diffScore < 0 ? 'text-red-500' : 'text-gray-400';
@@ -935,9 +840,6 @@ window.updateDiffUI = (prev, level) => {
   rateEl.textContent  = `${diffRate  >= 0 ? '+' : ''}${diffRate.toFixed(3)}`;
 };
 
-        // スコア保存（置き換え）
-        // スコア保存（バリデーション含む）
-// スコア保存（置き換え）— 未入力はエラーで弾く
 window.submitScore = () => {
   const inputEl = document.getElementById('scoreInput');
   const raw = (inputEl?.value ?? '');
@@ -947,13 +849,11 @@ window.submitScore = () => {
     return;
   }
 
-  // ★ 未入力（空白）を弾く
   if (raw.trim() === '') {
     showToast('スコアが未入力です', 'error');
     return;
   }
 
-  // 0〜1,000,000にバリデーション
   const scoreNum = Math.max(0, Math.min(1000000, parseInt(raw, 10)));
   if (Number.isNaN(scoreNum)) {
     showToast('スコアが数値ではありません', 'warn');
@@ -983,7 +883,7 @@ window.submitScore = () => {
         window.submitSong = async () => {
             const title = document.getElementById('songTitle').value;
             const artist = document.getElementById('songArtist').value;
-            
+
             if (!title || !artist) {
                 alert('タイトルとアーティストは必須です');
                 return;
@@ -1001,14 +901,12 @@ window.submitScore = () => {
                 .map(s => s.trim())
                 .filter(Boolean);
 
-            // 難易度が1つも設定されていない場合の警告
             if (Object.keys(difficulties).length === 0) {
                 if (!confirm('難易度が1つも設定されていません。このまま保存しますか？')) {
                     return;
                 }
             }
 
-            // 保存ボタンを無効化（二重送信防止）
             const saveButton = document.getElementById('saveSongButton');
             if (saveButton) {
                 saveButton.disabled = true;
@@ -1026,7 +924,6 @@ window.submitScore = () => {
             } catch (error) {
                 console.error('保存エラー:', error);
                 alert('保存に失敗しました: ' + error.message);
-                // ボタンを元に戻す
                 if (saveButton) {
                     saveButton.disabled = false;
                     saveButton.textContent = '保存';
@@ -1049,20 +946,14 @@ window.submitScore = () => {
             return text?.toString().replace(/[&<>"']/g, m => map[m]) || '';
         }
 
-        // 初期化
         initFirebase();
 
-        // タブ切り替え関数をグローバルに公開
         window.switchPage = switchPage;
 
-        // 追加：検索入力ハンドラ（ページ全体を再描画しない）
         window.handleSongSearch = (v) => {
-          // 小文字化せずそのまま保持（表示の見た目が崩れないように）
           window.songSearchTerm = v || '';
-          // グリッドだけを差し替える
           if (typeof fillSongGrid === 'function') fillSongGrid();
         };
-        // --- toast: 一時バナー表示（alert の代替） ---
 (function(){
   function ensureToastContainer() {
     let c = document.getElementById('toastContainer');
@@ -1089,7 +980,6 @@ window.submitScore = () => {
   };
 })();
 
-        // 1行の複合表示を更新
 window.updateCombinedLine = (prevScore, prevRate, diffScore, diffRate) => {
   const el = document.getElementById('diffCombined');
   if (!el) return;
@@ -1115,10 +1005,9 @@ window.updateCombinedLine = (prevScore, prevRate, diffScore, diffRate) => {
     `<span class="${rateColor} font-semibold">${signRate} ${absRate}</span>)`;
 };
 
-        // 入力値を数値だけにサニタイズして 0..1,000,000 にクランプ
 window.sanitizeAndClampScore = (raw) => {
   const digits = String(raw ?? '').replace(/[^\d]/g, '');
-  if (digits === '') return { value: '', number: null };      // 未入力（空）
+  if (digits === '') return { value: '', number: null };
   let n = parseInt(digits, 10);
   if (Number.isNaN(n)) n = 0;
   if (n > 1000000) n = 1000000;
@@ -1126,18 +1015,14 @@ window.sanitizeAndClampScore = (raw) => {
   return { value: String(n), number: n };
 };
 
-// 入力と同時に差分を計算＆表示（置き換え）
-// 入力と同時に差分を計算＆表示（クランプ復活）
 window.updateDiffUI = (prev, level) => {
   const input = document.getElementById('scoreInput');
   const el    = document.getElementById('diffCombined');
   if (!input || !el) return;
 
-  // まずサニタイズ＆クランプ（登録が無くても入力欄は常に矯正）
   const { value, number } = sanitizeAndClampScore(input.value);
   if (input.value !== value) input.value = value;
 
-  // 登録が無い場合は差分を出さない
   if (!prev) {
     el.textContent = '登録済スコア: なし';
     return;
@@ -1146,13 +1031,11 @@ window.updateDiffUI = (prev, level) => {
   const prevScore = Number(prev.score) || 0;
   const prevRate  = Number(prev.rate)  || 0;
 
-  // 未入力なら +0 / +0.000（灰色）
   if (value === '') {
     updateCombinedLine(prevScore, prevRate, 0, 0);
     return;
   }
 
-  // 差分計算
   const diffScore = number - prevScore;
   const newRate   = parseFloat(calculateRate(number, level)); // "0.000" 文字列想定
   const diffRate  = newRate - prevRate;
@@ -1160,7 +1043,6 @@ window.updateDiffUI = (prev, level) => {
   updateCombinedLine(prevScore, prevRate, diffScore, diffRate);
 };
 
-// Rating値に応じて文字色を変える関数
 function updateRatingColor(value) {
   const el = document.getElementById("ratingValue");
   if (!el) return;
@@ -1192,12 +1074,10 @@ document.head.appendChild(rainbowStyle);
     </script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black">
-    <!-- ローディング画面 -->
     <div id="loading" class="min-h-screen flex items-center justify-center">
         <div class="text-white text-2xl">ログイン中...</div>
     </div>
 
-    <!-- メインアプリ -->
     <div id="app" class="hidden">
         <!-- ヘッダー -->
         <div class="bg-black bg-opacity-50 backdrop-blur-sm border-b border-white border-opacity-20">
@@ -1205,17 +1085,14 @@ document.head.appendChild(rainbowStyle);
                 <div class="flex items-center justify-between flex-wrap gap-4">
                     <div>
                         <h1 class="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
-                            <!-- DataCube Mark: cube + layered data -->
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
      class="w-8 h-8 text-white" role="img" aria-label="App icon: data cube">
-  <!-- Cube outline -->
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
-  <!-- Top rim -->
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M4 7.5l8 4 8-4" />
 </svg>
-                            TAKUMI³ Play³r DB
+                            CubicDB <small style="font-size: 0.5em;">TAKUMI³ Play³r Database</small>
                         </h1>
                         <div id="userIdDisplay" class="mt-2"></div>
                     </div>
@@ -1234,7 +1111,6 @@ document.head.appendChild(rainbowStyle);
             </div>
         </div>
 
-        <!-- コンテンツエリア -->
         <div class="max-w-7xl mx-auto px-4 py-8">
             <div id="content"></div>
         </div>
