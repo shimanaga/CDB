@@ -10,6 +10,29 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, getIdTokenResult, onIdTokenChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
+let cachedPrimaryUid = null;
+
+async function resolvePrimaryUid(auth, db) {
+  const u = auth.currentUser;
+  if (!u) throw new Error("not signed in");
+
+  if (cachedPrimaryUid) return cachedPrimaryUid;
+
+  const snap = await getDoc(doc(db, "aliases", u.uid));
+  cachedPrimaryUid =
+    (snap.exists() && snap.data()?.active && snap.data()?.primaryUid) || u.uid;
+
+  // デバッグ用にも見えるように
+  window.primaryUid = cachedPrimaryUid;
+  return cachedPrimaryUid;
+}
+
+function resetPrimaryUidCache() {
+  cachedPrimaryUid = null;
+  delete window.primaryUid;
+}
+
+
         // Firebase設定（あなたの設定値に置き換えてください）
         const firebaseConfig = {
             apiKey: "AIzaSyBrlOj1D_Tkk16l9_T_gHcGgGvgjXrkg2k",
@@ -45,24 +68,33 @@
                 await signInAnonymously(auth);
 
                 // 認証状態の監視
-                onAuthStateChanged(auth, async (user) => {
+                // 認証状態の監視（置き換え）
+onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
 
-    // Firestoreのusers/{uid}から管理者フラグを確認
+    // ★ 管理者フラグ（従来どおり user.uid を参照でOK）
     const userDoc = await getDoc(doc(db, "users", user.uid));
     isAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
     document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
 
-                        window.currentUser = user; // グローバルに公開
-                        
-                        document.getElementById('loading').classList.add('hidden');
-                        document.getElementById('app').classList.remove('hidden');
-                        await loadUserData(user.uid);
-                        await loadSongs();
-                        renderCurrentPage();
-                    }
-                });
+    window.currentUser = user; // グローバル公開
+
+    // ★ 主UIDを解決（ID2→ID1）
+    const primaryUid = await resolvePrimaryUid(auth, db);
+
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+
+    // ★ データは主UIDから読み込む
+    await loadUserData(primaryUid);
+    await loadSongs();
+    renderCurrentPage();
+  } else {
+    // 未ログイン時など
+    resetPrimaryUidCache();
+  }
+});
 
 // Firestore上のisAdminが変わったときに反映
 onIdTokenChanged(auth, async (user) => {
@@ -179,13 +211,15 @@ onIdTokenChanged(auth, async (user) => {
             return (scoreRate).toFixed(3);
         }
 
-        // スコア保存（サブコレクション構造）
+// スコア保存（サブコレ構造）— 主UIDに保存（置き換え）
 async function saveScore(songId, difficulty, score, level) {
   const rate = calculateRate(parseInt(score), parseFloat(level));
   const scoreId = `${songId}_${difficulty}`;
 
   try {
-    await setDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId), {
+    const uid = window.primaryUid || await resolvePrimaryUid(auth, db); // ★主UID
+
+    await setDoc(doc(db, 'users', uid, 'scores', scoreId), {
       songId,
       difficulty,
       score: parseInt(score),
@@ -197,26 +231,21 @@ async function saveScore(songId, difficulty, score, level) {
     // ローカル反映
     userScores[scoreId] = { songId, difficulty, score: parseInt(score), level: parseFloat(level), rate: parseFloat(rate) };
 
-    // ✅ トースト通知（一覧に戻さない）
     showToast('スコアを保存しました', 'success');
 
-    // 次の難易度を入れやすいよう入力状態をリセット
+    // 入力状態のリセット等（元の挙動を維持）
     window.selectedDifficulty = null;
     window.selectedLevel = null;
     const input = document.getElementById('scoreInput');
     if (input) input.value = '';
 
-    // 難易度ボタンのハイライト解除 & 入力欄を一旦隠す
-    if (typeof DIFFICULTIES !== 'undefined') {
-      DIFFICULTIES.forEach(d => {
-        const btn = document.getElementById(`diff_${d}`);
-        if (btn) { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
-      });
-    }
+    DIFFICULTIES.forEach(d => {
+      const btn = document.getElementById(`diff_${d}`);
+      if (btn) { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
+    });
     const inputs = document.getElementById('scoreInputs');
     if (inputs) inputs.classList.add('hidden');
 
-    // 画面はスコア登録のまま（同じ曲）。必要なら再描画だけ行う
     if (currentPage === 'score' && selectedSong && selectedSong.id === songId) {
       const content = document.getElementById('content');
       if (typeof renderScoreEntry === 'function' && content) renderScoreEntry(content);
@@ -227,20 +256,21 @@ async function saveScore(songId, difficulty, score, level) {
   }
 }
 
-        // スコア削除
-        async function deleteScore(scoreId) {
-            if (!confirm('このスコアを削除しますか？')) return;
-            
-            try {
-                await deleteDoc(doc(db, 'users', currentUser.uid, 'scores', scoreId));
-                delete userScores[scoreId];
-                showToast('スコアを削除しました', 'success')
-                renderCurrentPage();
-            } catch (error) {
-                console.error("スコア削除エラー:", error);
-                alert('スコアの削除に失敗しました');
-            }
-        }
+        // スコア削除（置き換え）
+async function deleteScore(scoreId) {
+  if (!confirm('このスコアを削除しますか？')) return;
+
+  try {
+    const uid = window.primaryUid || await resolvePrimaryUid(auth, db); // ★主UID
+    await deleteDoc(doc(db, 'users', uid, 'scores', scoreId));
+    delete userScores[scoreId];
+    showToast('スコアを削除しました', 'success')
+    renderCurrentPage();
+  } catch (error) {
+    console.error("スコア削除エラー:", error);
+    alert('スコアの削除に失敗しました');
+  }
+}
 
         // 楽曲保存（画像URL方式に変更）
         async function saveSong(songData) {
