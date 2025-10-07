@@ -116,18 +116,17 @@ document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
   }
 });
 
-// Firestore上のisAdminが変わったときに反映
+// Firestore / Auth の状態変化に応じて「継承込み」で再評価
 onIdTokenChanged(auth, async (user) => {
   if (!user) return;
-  const userDoc = await getDoc(doc(db, "users", user.uid));
-  const newIsAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
+
+  const newIsAdmin = await resolveEffectiveAdmin(auth, db); // ★ ここがポイント
   if (newIsAdmin !== isAdmin) {
     isAdmin = newIsAdmin;
     document.getElementById('adminTab')?.classList.toggle('hidden', !isAdmin);
     if (!isAdmin && currentPage === 'admin') switchPage('score');
   }
 });
-
 
             } catch (error) {
                 console.error("Firebase初期化エラー:", error);
