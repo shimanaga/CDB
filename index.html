@@ -432,65 +432,83 @@ function fillSongGrid() {
 }
 // --- add END: song search helpers ---
         
-        // スコア入力画面
-        function renderScoreEntry(container) {
-            const song = selectedSong;
-            container.innerHTML = `
-                <div class="bg-gradient-to-br from-white via-white to-slate-200 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
-                    <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-900 hover:text-purple-800 font-semibold">
-                      ← 戻る
-                    </button>
-                    
-                    ${song.imageUrl ? `
-                        <div class="mb-4 rounded-lg overflow-hidden">
-                            <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-80 object-cover" />
-                        </div>
-                    ` : ''}
-                    
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">${escapeHtml(song.title)}</h2>
-                    <p class="text-gray-600 mb-6">${escapeHtml(song.artist)}</p>
+        // スコア入力画面（置き換え）
+function renderScoreEntry(container) {
+  const song = selectedSong;
 
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">難易度を選択</label>
-                            <div class="flex flex-wrap gap-2" id="difficultyButtons">
-                                ${DIFFICULTIES.map((diff, idx) => 
-                                    song.difficulties?.[diff] ? 
-                                    `<button onclick="selectDifficulty('${diff}', ${song.difficulties[diff]})" class="${DIFFICULTY_COLORS[idx]} bg-opacity-50 hover:bg-opacity-100 text-white px-4 py-2 rounded-lg font-semibold transition" id="diff_${diff}">
-                                        ${diff} ${Number(song.difficulties[diff]).toFixed(1)}
-                                    </button>` 
-                                    : ''
-                                ).join('')}
-                            </div>
-                        </div>
+  // この曲の登録済みスコア（難易度ごと）
+  const registeredChips = DIFFICULTIES.map((diff, idx) => {
+    const s = userScores[`${song.id}_${diff}`];
+    if (!s) return '';
+    return `
+      <div class="flex items-center gap-2 px-2 py-1 rounded bg-white bg-opacity-70">
+        <span class="${DIFFICULTY_COLORS[idx]} text-white text-[10px] px-2 py-0.5 rounded font-bold">${diff}</span>
+        <span class="font-mono text-sm">${Number(s.score).toLocaleString()}</span>
+        <span class="text-xs text-gray-500">Rate ${Number(s.rate).toFixed(3)}</span>
+      </div>
+    `;
+  }).filter(Boolean).join('');
 
-                        <div id="scoreInputs" class="hidden space-y-4">
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">スコア</label>
-                                <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                            </div>
+  container.innerHTML = `
+    <div class="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-6 max-w-2xl mx-auto">
+      <button type="button" onclick="goBackFromScore()" class="mb-4 text-purple-700 hover:text-purple-900 font-semibold">
+        ← 戻る
+      </button>
 
-                            <button onclick="submitScore()" class="w-full bg-purple-800 hover:bg-purple-900 text-white font-bold py-3 rounded-lg transition">
-                                スコアを保存
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            setTimeout(() => {
-              const input = document.getElementById('scoreInput');
-              if (input) {
-                input.addEventListener('input', () => {
-                  let v = input.value.replace(/[^0-9]/g, '');
-                  if (v === '') return;
-                  let n = parseInt(v, 10);
-                  if (n < 0) n = 0;
-                  if (n > 1000000) n = 1000000;
-                  input.value = n;
-                });
-              }
-            },0);
-        }
+      ${song.imageUrl ? `
+        <div class="mb-4 rounded-lg overflow-hidden">
+          <img src="${song.imageUrl}" alt="${escapeHtml(song.title)}" class="w-full h-64 object-cover" />
+        </div>` : ''}
+
+      <h2 class="text-2xl font-bold text-gray-800 mb-2">${escapeHtml(song.title)}</h2>
+      <p class="text-gray-600 mb-6">${escapeHtml(song.artist)}</p>
+
+      <div class="space-y-4">
+        <!-- ★ 登録済みスコアを最上段に（上方向の余白は付けない） -->
+        <div id="registeredScores">
+          <div class="text-xs font-semibold text-gray-700">この曲の登録済みスコア</div>
+          ${registeredChips
+            ? `<div class="flex flex-wrap gap-2 mt-1">${registeredChips}</div>`
+            : `<div class="text-xs text-gray-500 mt-1">未登録</div>`}
+        </div>
+
+        <!-- 難易度選択（従来どおり） -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">難易度を選択</label>
+          <div class="flex flex-wrap gap-2" id="difficultyButtons">
+            ${DIFFICULTIES
+              .map((diff, idx) =>
+                song.difficulties?.[diff]
+                  ? `<button onclick="selectDifficulty('${diff}', ${song.difficulties[diff]})"
+                       class="${DIFFICULTY_COLORS[idx]} bg-opacity-50 hover:bg-opacity-100 text-white px-4 py-2 rounded-lg font-semibold transition"
+                       id="diff_${diff}">
+                      ${diff} ${Number(song.difficulties[diff]).toFixed(1)}
+                     </button>`
+                  : ''
+              )
+              .join('')}
+          </div>
+        </div>
+
+        <!-- スコア入力 -->
+        <div id="scoreInputs" class="hidden space-y-3">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">スコア</label>
+            <input type="number" id="scoreInput" placeholder="1000000" min="0" max="1000000"
+                   class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+            <!-- 1行でまとめて表示 -->
+            <div id="diffCombined" class="text-sm mt-2"></div>
+          </div>
+
+          <button onclick="submitScore()"
+                  class="w-full bg-purple-800 hover:bg-purple-900 text-white font-bold py-3 rounded-lg transition">
+            スコアを保存
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
         // 統計画面
         function renderStatistics(container) {
@@ -530,12 +548,12 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
 
   <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">B40平均レート</div>
-    <div class="text-xl font-bold text-purple-700">${avgRate}</div>
+    <div class="text-xl font-bold text-green-500">${avgRate}</div>
   </div>
 
   <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
     <div class="text-xs text-gray-500">B40下限</div>
-    <div class="text-xl font-bold text-purple-700">${b40Lower}</div>
+    <div class="text-xl font-bold text-sky-500">${b40Lower}</div>
   </div>
 
   <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
@@ -794,39 +812,102 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
             renderCurrentPage();
         };
 
-        window.selectDifficulty = (diff, level) => {
-          window.selectedDifficulty = diff;
-          window.selectedLevel = Number(level);
-          document.getElementById('scoreInputs').classList.remove('hidden');
+// 難易度選択（置き換え）
+window.selectDifficulty = (diff, level) => {
+  window.selectedDifficulty = diff;
+  window.selectedLevel = Number(level);
 
-          DIFFICULTIES.forEach(d => {
-            const btn = document.getElementById(`diff_${d}`);
-            if (!btn) return;
-            if (d === diff) {
-              btn.classList.remove('bg-opacity-50');
-              btn.classList.add('bg-opacity-100');
-            } else {
-              btn.classList.remove('bg-opacity-100');
-              btn.classList.add('bg-opacity-50');
-            }
-          });
-        };
+  const inputs = document.getElementById('scoreInputs');
+  if (inputs) inputs.classList.remove('hidden');
+
+  // ボタンのハイライト
+  DIFFICULTIES.forEach(d => {
+    const btn = document.getElementById(`diff_${d}`);
+    if (!btn) return;
+    if (d === diff) { btn.classList.remove('bg-opacity-50'); btn.classList.add('bg-opacity-100'); }
+    else { btn.classList.remove('bg-opacity-100'); btn.classList.add('bg-opacity-50'); }
+  });
+
+  // 以前のスコア（この譜面・難易度）
+  const prev = userScores[`${selectedSong.id}_${diff}`] || null;
+  const diffEl = document.getElementById('diffCombined');
+
+  if (prev) {
+    // 初期は差分 0 を灰色で
+    updateCombinedLine(Number(prev.score)||0, Number(prev.rate)||0, 0, 0);
+  } else {
+    diffEl.textContent = '登録済スコア: なし';
+  }
+
+  // 入力と同時に差分更新（サニタイズ込み）
+  const input = document.getElementById('scoreInput');
+if (input) {
+  input.value = '';
+  // 入力のたびにクランプ＆差分更新
+  input.oninput  = () => updateDiffUI(prev, window.selectedLevel);
+  // フォーカスを外した／change時も最終クランプ
+  input.onblur   = () => updateDiffUI(prev, window.selectedLevel);
+  input.onchange = () => updateDiffUI(prev, window.selectedLevel);
+}
+};
+
+// 入力と同時に差分を色分け表示（追加）
+window.updateDiffUI = (prev, level) => {
+  const input  = document.getElementById('scoreInput');
+  const scoreEl = document.getElementById('scoreDiff');
+  const rateEl  = document.getElementById('rateDiff');
+  if (!input || !scoreEl || !rateEl) return;
+
+  const raw = input.value;
+  if (raw === '') { scoreEl.textContent = ''; rateEl.textContent = ''; return; }
+
+  // 以前のスコアが無いなら差分は出さない（要件どおり）
+  if (!prev) { scoreEl.textContent = ''; rateEl.textContent = ''; return; }
+
+  const n = Math.max(0, Math.min(1000000, parseInt(raw, 10) || 0));
+
+  const prevScore = Number(prev.score) || 0;
+  const prevRate  = Number(prev.rate)  || 0;
+
+  const diffScore = n - prevScore;
+  const newRate   = parseFloat(calculateRate(n, level)); // calculateRate は "0.000" 形式の文字列
+  const diffRate  = newRate - prevRate;
+
+  const scoreColor = diffScore > 0 ? 'text-green-500' : diffScore < 0 ? 'text-red-500' : 'text-gray-400';
+  const rateColor  = diffRate  > 0 ? 'text-green-500' : diffRate  < 0 ? 'text-red-500' : 'text-gray-400';
+
+  scoreEl.className = `text-sm font-semibold mt-1 ${scoreColor}`;
+  rateEl.className  = `text-sm font-semibold mt-1 ${rateColor}`;
+
+  scoreEl.textContent = `${diffScore >= 0 ? '+' : ''}${diffScore.toFixed(0)}`;
+  rateEl.textContent  = `${diffRate  >= 0 ? '+' : ''}${diffRate.toFixed(3)}`;
+};
 
         // スコア保存（置き換え）
         // スコア保存（バリデーション含む）
+// スコア保存（置き換え）— 未入力はエラーで弾く
 window.submitScore = () => {
-  const raw = document.getElementById('scoreInput').value;
+  const inputEl = document.getElementById('scoreInput');
+  const raw = (inputEl?.value ?? '');
 
   if (!window.selectedDifficulty) {
     showToast('難易度を選択してください', 'warn');
     return;
   }
-  // 0〜1,000,000にバリデーション（キーボード入力対策済みでも最終防衛）
-  const scoreNum = Math.max(0, Math.min(1000000, parseInt(raw || '0', 10)));
+
+  // ★ 未入力（空白）を弾く
+  if (raw.trim() === '') {
+    showToast('スコアが未入力です', 'error');
+    return;
+  }
+
+  // 0〜1,000,000にバリデーション
+  const scoreNum = Math.max(0, Math.min(1000000, parseInt(raw, 10)));
   if (Number.isNaN(scoreNum)) {
     showToast('スコアが数値ではありません', 'warn');
     return;
   }
+
   saveScore(selectedSong.id, window.selectedDifficulty, scoreNum, window.selectedLevel);
 };
 
@@ -955,6 +1036,78 @@ window.submitScore = () => {
     setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, ms);
   };
 })();
+
+        // 1行の複合表示を更新
+window.updateCombinedLine = (prevScore, prevRate, diffScore, diffRate) => {
+  const el = document.getElementById('diffCombined');
+  if (!el) return;
+
+  const scoreColor = diffScore > 0 ? 'text-green-500'
+                    : diffScore < 0 ? 'text-red-500'
+                    : 'text-gray-400';
+
+  const rateColor  = diffRate  > 0 ? 'text-green-500'
+                    : diffRate  < 0 ? 'text-red-500'
+                    : 'text-gray-400';
+
+  const signScore = diffScore >= 0 ? '+' : '-';
+  const signRate  = diffRate  >= 0 ? '+' : '-';
+
+  const absScore  = Math.abs(Math.trunc(diffScore)).toLocaleString();
+  const absRate   = Math.abs(diffRate).toFixed(3);
+
+  el.innerHTML =
+    `登録済スコア: ${Number(prevScore).toLocaleString()} ` +
+    `<span class="${scoreColor} font-semibold">${signScore} ${absScore}</span>` +
+    ` (Rate ${Number(prevRate).toFixed(3)} ` +
+    `<span class="${rateColor} font-semibold">${signRate} ${absRate}</span>)`;
+};
+
+        // 入力値を数値だけにサニタイズして 0..1,000,000 にクランプ
+window.sanitizeAndClampScore = (raw) => {
+  const digits = String(raw ?? '').replace(/[^\d]/g, '');
+  if (digits === '') return { value: '', number: null };      // 未入力（空）
+  let n = parseInt(digits, 10);
+  if (Number.isNaN(n)) n = 0;
+  if (n > 1000000) n = 1000000;
+  if (n < 0) n = 0;
+  return { value: String(n), number: n };
+};
+
+// 入力と同時に差分を計算＆表示（置き換え）
+// 入力と同時に差分を計算＆表示（クランプ復活）
+window.updateDiffUI = (prev, level) => {
+  const input = document.getElementById('scoreInput');
+  const el    = document.getElementById('diffCombined');
+  if (!input || !el) return;
+
+  // まずサニタイズ＆クランプ（登録が無くても入力欄は常に矯正）
+  const { value, number } = sanitizeAndClampScore(input.value);
+  if (input.value !== value) input.value = value;
+
+  // 登録が無い場合は差分を出さない
+  if (!prev) {
+    el.textContent = '登録済スコア: なし';
+    return;
+  }
+
+  const prevScore = Number(prev.score) || 0;
+  const prevRate  = Number(prev.rate)  || 0;
+
+  // 未入力なら +0 / +0.000（灰色）
+  if (value === '') {
+    updateCombinedLine(prevScore, prevRate, 0, 0);
+    return;
+  }
+
+  // 差分計算
+  const diffScore = number - prevScore;
+  const newRate   = parseFloat(calculateRate(number, level)); // "0.000" 文字列想定
+  const diffRate  = newRate - prevRate;
+
+  updateCombinedLine(prevScore, prevRate, diffScore, diffRate);
+};
+
 // Rating値に応じて文字色を変える関数
 function updateRatingColor(value) {
   const el = document.getElementById("ratingValue");
