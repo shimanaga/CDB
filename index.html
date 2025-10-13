@@ -189,8 +189,48 @@
                 });
                 window.userScores = userScores;
                 console.log(`${scoreSnapshot.docs.length}件のスコアを読み込みました`);
+
+                if (userDoc.exists() && userDoc.data()?.rateMigrated !== true) {
+                    console.log("初回レート再計算を実行します...");
+                    await migrateOldRates(userId);
+                    await setDoc(doc(db, "users", userId), { rateMigrated: true }, { merge: true });
+                    console.log("レート再計算が完了しました。");
+                    showToast('レートの再計算を実行しました', 'success');
+                }
             } catch (error) {
                 console.error("ユーザーデータ読み込みエラー:", error);
+            }
+        }
+
+        // --- レート再計算処理 ---
+        async function migrateOldRates(userId) {
+            try {
+                const scoresCol = collection(db, "users", userId, "scores");
+                const scoreSnapshot = await getDocs(scoresCol);
+
+                let updateCount = 0;
+                for (const docSnap of scoreSnapshot.docs) {
+                    const data = docSnap.data();
+                    const score = data.score;
+                    const level = data.level;
+                    const rate = data.rate;
+
+                    if (typeof score !== "number" || typeof level !== "number") continue;
+
+                    const recalculated = calculateRate(score, level);
+
+                    if (Math.abs(recalculated - rate) > 0.0004) {
+                        await setDoc(
+                            doc(db, "users", userId, "scores", docSnap.id),
+                            { rate: recalculated },
+                            { merge: true }
+                        );
+                        updateCount++;
+                    }
+                }
+                console.log(`レート再計算完了: ${updateCount}件を更新しました`);
+            } catch (error) {
+                console.error("レート再計算エラー:", error);
             }
         }
 
@@ -201,7 +241,7 @@
                             score >= 990000 ? (level + (1 + (score - 990000) / 10000)) / 34 :
                             score >= 970000 ? (level + (score - 970000) / 20000) / 34 :
                             score >= 800000 ? (level * (score - 800000) / 170000) / 34 : 0;
-            return (scoreRate).toFixed(3);
+            return scoreRate;
         }
 
         async function saveScore(songId, difficulty, score, level) {
@@ -216,7 +256,7 @@
                     difficulty,
                     score: parseInt(score),
                     level: parseFloat(level),
-                    rate: parseFloat(rate),
+                    rate: rate,
                     timestamp: new Date().toISOString()
                 });
 
@@ -499,17 +539,22 @@
         }
 
         function renderStatistics(container) {
-const ratesRaw = Object.values(userScores).map(s => Number(s.rate));
-const rates = ratesRaw.filter(n => !Number.isNaN(n));
-const sorted = [...rates].sort((a, b) => b - a);
-const topRates = sorted.slice(0, 40);
-const sumTop = topRates.reduce((a, b) => a + b, 0);
+  const ratesRaw = Object.values(userScores).map(s => Number(s.rate));
+  const rates = ratesRaw.filter(n => !Number.isNaN(n));
+  const sorted = [...rates].sort((a, b) => b - a);
+  const topRates = sorted.slice(0, 40);
+  const sumTop = topRates.reduce((a, b) => a + b, 0);
 
-const totalRate = topRates.length > 0 ? sumTop.toFixed(3) : '0.000';
+  const totalRate = topRates.length > 0 ? sumTop.toFixed(4) : '0.0000';
+  const formattedRate = totalRate.slice(0, -1) + `<span class="text-sm">${totalRate.slice(-1)}</span>`;
 
-const avgRate = (sumTop / 40).toFixed(3);
+  const scaled = !!window.showScaledRates;
 
-const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
+  const displayTopRates = scaled ? topRates.map(r => r * 40) : topRates;
+  const sumDisplayTop = displayTopRates.reduce((a, b) => a + b, 0);
+
+  const avgRate = topRates.length > 0 ? (sumDisplayTop / 40).toFixed(3) : '0.000';
+  const b40Lower = sorted.length >= 40 ? (scaled ? (sorted[39] * 40).toFixed(3) : sorted[39].toFixed(3)) : '0.000';
 
   const songMap = Object.fromEntries(songs.map(s => [s.id, s]));
   const scoresWithSongInfo = Object.entries(userScores)
@@ -517,84 +562,111 @@ const b40Lower = sorted.length >= 40 ? sorted[39].toFixed(3) : '0.000';
     .sort((a, b) => b.rate - a.rate);
 
   container.innerHTML = `
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
-    <div class="text-xs text-gray-500">Rating</div>
-    <div>
-  <span id="ratingValue" class="text-xl font-bold text-purple-700">${totalRate}</span>
-</div>
-  </div>
-
-  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
-    <div class="text-xs text-gray-500">B40平均レート</div>
-    <div class="text-xl font-bold text-green-500">${avgRate}</div>
-  </div>
-
-  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
-    <div class="text-xs text-gray-500">B40下限</div>
-    <div class="text-xl font-bold text-sky-500">${b40Lower}</div>
-  </div>
-
-  <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
-    <div class="text-xs text-gray-500">登録スコア数</div>
-    <div class="text-xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
-  </div>
-</div>
-
-    <div id="scoreList" class="space-y-2">
-      ${
-        scoresWithSongInfo.map((score, idx) => `
-          ${scoresWithSongInfo.length > 40 && idx === 40 ? `
-            <div class="relative flex items-center justify-center my-6">
-        <span class="text-2xl font-bold text-yellow-400 z-10">BEST40</span>
-        <div class="absolute left-0 right-2/3 top-1/2 transform -translate-y-1/2 border-t-2 border-yellow-400 z-0"></div>
-        <div class="absolute left-2/3 right-0 top-1/2 transform -translate-y-1/2 border-t-2 border-yellow-400 z-0"></div>
-      </div>
-
-          ` : ''}
-
-          <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gradient-to-br from-white via-white to-slate-200 rounded-lg shadow-sm">
-            ${
-              score.song?.imageUrl ? `
-                <img src="${score.song.imageUrl}"
-                     alt="${escapeHtml(score.song.title || '')}"
-                     class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 object-cover rounded" />
-              ` : `
-                <div class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center">
-                  <svg class="w-8 h-8 text-white opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                  </svg>
-                </div>
-              `
-            }
-
-            <div class="flex-1 min-w-0">
-              <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song?.title || '(不明な曲)')}</div>
-              <div class="text-xs sm:text-sm text-gray-600 truncate">
-                ${escapeHtml(score.difficulty)} Lv.${Number(score.level).toFixed(1)}
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between sm:justify-end gap-3 sm:ml-4 shrink-0 w-full sm:w-auto">
-              <div class="text-right flex-1 sm:flex-none min-w-0">
-                <div class="font-bold text-base sm:text-lg text-purple-700 leading-tight">Rate: ${score.rate}</div>
-                <div class="text-xs sm:text-sm text-gray-600 leading-tight">${Number(score.score).toLocaleString()}</div>
-              </div>
-              <button
-                class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm rounded-md transition shrink-0"
-                title="削除"
-                onclick="deleteScore('${score.scoreId}')"
-              >
-                削除
-              </button>
-            </div>
-          </div>
-        `).join('')
-      }
+<div class="flex items-center justify-between mb-3">
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+    <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
+      <div class="text-xs text-gray-500">Rating</div>
+      <div><span id="ratingValue" class="text-xl font-bold text-purple-700">${formattedRate}</span></div>
     </div>
+
+    <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
+      <div class="text-xs text-gray-500">B40平均レート</div>
+      <div class="text-xl font-bold text-green-500">${avgRate}</div>
+    </div>
+
+    <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
+      <div class="text-xs text-gray-500">B40下限</div>
+      <div class="text-xl font-bold text-sky-500">${b40Lower}</div>
+    </div>
+
+    <div class="bg-slate-50 rounded-lg p-3 shadow-sm text-center">
+      <div class="text-xs text-gray-500">登録スコア数</div>
+      <div class="text-xl font-bold text-purple-700">${Object.keys(userScores).length}</div>
+    </div>
+  </div>
+
+  <div class="ml-4 flex-shrink-0">
+  <button
+    onclick="toggleScaledRates()"
+    id="scaleToggleBtn"
+    class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold shadow-sm transition
+      ${scaled
+        ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
+        : 'bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 hover:from-gray-300 hover:to-gray-400'}
+    "
+  >
+    ${scaled
+      ? `<svg xmlns='http://www.w3.org/2000/svg' class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+           <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2'
+                 d='M5 13l4 4L19 7' />
+         </svg>
+         表示切り替え`
+      : `<svg xmlns='http://www.w3.org/2000/svg' class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+           <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2'
+                 d='M6 18L18 6M6 6l12 12' />
+         </svg>
+         表示切り替え`}
+  </button>
+</div>
+
+</div>
+
+<div id="scoreList" class="space-y-2">
+  ${
+    scoresWithSongInfo.map((score, idx) => `
+      ${scoresWithSongInfo.length > 40 && idx === 40 ? `
+        <div class="relative flex items-center justify-center my-6">
+          <span class="text-2xl font-bold text-yellow-400 z-10">BEST40</span>
+          <div class="absolute left-0 right-2/3 top-1/2 transform -translate-y-1/2 border-t-2 border-yellow-400 z-0"></div>
+          <div class="absolute left-2/3 right-0 top-1/2 transform -translate-y-1/2 border-t-2 border-yellow-400 z-0"></div>
+        </div>
+      ` : ''}
+
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gradient-to-br from-white via-white to-slate-200 rounded-lg shadow-sm">
+        ${
+          score.song?.imageUrl ? `
+            <img src="${score.song.imageUrl}"
+                 alt="${escapeHtml(score.song.title || '')}"
+                 class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 object-cover rounded" />
+          ` : `
+            <div class="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded flex items-center justify-center">
+              <svg class="w-8 h-8 text-white opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+              </svg>
+            </div>
+          `
+        }
+
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-gray-800 truncate">${escapeHtml(score.song?.title || '(不明な曲)')}</div>
+          <div class="text-xs sm:text-sm text-gray-600 truncate">
+            ${escapeHtml(score.difficulty)} Lv.${Number(score.level).toFixed(1)}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between sm:justify-end gap-3 sm:ml-4 shrink-0 w-full sm:w-auto">
+          <div class="text-right flex-1 sm:flex-none min-w-0">
+            <div class="font-bold text-base sm:text-lg text-purple-700 leading-tight">Rate: ${
+              scaled ? Number(score.rate * 40).toFixed(3) : Number(score.rate).toFixed(3)
+            }</div>
+            <div class="text-xs sm:text-sm text-gray-600 leading-tight">${Number(score.score).toLocaleString()}</div>
+          </div>
+          <button
+            class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm rounded-md transition shrink-0"
+            title="削除"
+            onclick="deleteScore('${score.scoreId}')"
+          >
+            削除
+          </button>
+        </div>
+      </div>
+    `).join('')
+  }
+</div>
   `;
-                updateRatingColor(parseFloat(totalRate));
+
+  updateRatingColor(parseFloat(totalRate));
 }
 
         function renderAdmin(container) {
@@ -840,6 +912,12 @@ window.updateDiffUI = (prev, level) => {
   rateEl.textContent  = `${diffRate  >= 0 ? '+' : ''}${diffRate.toFixed(3)}`;
 };
 
+window.toggleScaledRates = () => {
+  window.showScaledRates = !window.showScaledRates;
+  renderCurrentPage();
+};
+
+
 window.submitScore = () => {
   const inputEl = document.getElementById('scoreInput');
   const raw = (inputEl?.value ?? '');
@@ -934,6 +1012,7 @@ window.submitScore = () => {
         window.deleteSong = deleteSong;
         window.deleteScore = deleteScore;
         window.renderCurrentPage = renderCurrentPage;
+        window.showScaledRates = false;
 
         function escapeHtml(text) {
             const map = {
