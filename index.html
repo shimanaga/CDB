@@ -219,14 +219,12 @@
 
                     const recalculated = calculateRate(score, level);
 
-                    if (Math.abs(recalculated - rate) > 0.0004) {
                         await setDoc(
                             doc(db, "users", userId, "scores", docSnap.id),
                             { rate: recalculated },
                             { merge: true }
                         );
                         updateCount++;
-                    }
                 }
                 console.log(`レート再計算完了: ${updateCount}件を更新しました`);
             } catch (error) {
